@@ -1,0 +1,15 @@
+{
+  "name": "smart-invoice-automation-system",
+  "version": "1.0.0",
+  "description": "Invoice Processing Engine & Approval Workflow with MongoDB",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "rpa:robot": "python run_robot.py rpa",
+    "test:robot": "python run_robot.py api"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "express": "^4.22.2"
+  }
+}
