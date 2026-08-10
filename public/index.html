@@ -45,10 +45,10 @@
       </nav>
 
       <div class="db-status-card">
-        <div class="status-indicator online"></div>
+        <div class="status-indicator online" id="mongoDbIndicator"></div>
         <div class="db-info">
           <p class="title">MongoDB Status</p>
-          <p class="subtitle">Connected to <code>invoices_db</code></p>
+          <p class="subtitle" id="mongoDbSub">Connected to <code>smart_invoice_db</code></p>
         </div>
       </div>
     </aside>
@@ -63,17 +63,26 @@
         </div>
 
         <div class="header-actions">
-          <!-- 3-Role Switcher Control -->
-          <div class="role-switcher-container">
-            <label for="roleSelector" class="role-label">Active Role:</label>
-            <div class="role-selector-wrapper">
-              <select id="roleSelector" onchange="switchRole(this.value)" class="role-select">
-                <option value="AP_CLERK">👤 Accounts Payable (AP Clerk)</option>
-                <option value="ADMIN">⚙️ System / RPA Admin</option>
-                <option value="FINANCE_MANAGER" selected>👑 Finance Manager (Approver)</option>
-              </select>
+          <!-- Account Profile & Auth Modal Trigger -->
+          <div class="user-profile-widget" id="userProfileWidget">
+            <div class="user-info-chip" onclick="openAuthModal()">
+              <span class="user-avatar" id="userAvatar">👤</span>
+              <div class="user-details">
+                <span class="user-name" id="userNameLabel">Guest User</span>
+                <span class="user-role-badge" id="userRoleBadge">AP Clerk</span>
+              </div>
             </div>
+            <button class="btn sm ghost auth-action-btn" id="btnAuthAction" onclick="handleAuthButtonClick()">
+              🔑 Sign In / Sign Up
+            </button>
           </div>
+
+          <!-- Hidden legacy role switcher synced with logged in user -->
+          <select id="roleSelector" onchange="switchRole(this.value)" class="role-select" style="display:none;">
+            <option value="AP_CLERK">👤 Accounts Payable (AP Clerk)</option>
+            <option value="ADMIN">⚙️ System / RPA Admin</option>
+            <option value="FINANCE_MANAGER">👑 Finance Manager (Approver)</option>
+          </select>
 
           <div class="stats-pills">
             <div class="pill">
@@ -300,7 +309,7 @@
             </div>
             <pre class="console-body" id="consoleLogs">
 [ENGINE_INIT] Pipeline standby. Awaiting invoice inputs...
-[MONGO_DRIVER] MongoDB replica set connection verified (db: invoices_db).
+[MONGO_DRIVER] Connected to MongoDB Database 'smart_invoice_db'.
             </pre>
           </div>
         </div>
@@ -312,7 +321,7 @@
           <div class="mongodb-header">
             <div>
               <h3>MongoDB Collection: <code>invoices</code></h3>
-              <p>Database: <code>invoices_db</code> | Primary Key: <code>_id</code></p>
+              <p>Database: <code>smart_invoice_db</code> | Primary Key: <code>_id</code></p>
             </div>
             <div class="filter-controls" style="display:flex; gap:12px; align-items:center;">
               <select id="dbStatusFilter" onchange="renderMongoDBTable()">
@@ -362,7 +371,7 @@
             <span>🔒 <strong>Role Restriction:</strong> Approval actions are restricted to Finance Managers. Active role is view-only.</span>
           </div>
 
-          <div class="desk-filters-bar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+          <div class="desk-filters-bar" style="display:flex; justify-space-between; align-items:center; margin-bottom:24px;">
             <div class="desk-filters">
               <button class="tab-btn active" onclick="filterApproval('PENDING', this)">Pending Approvals</button>
               <button class="tab-btn" onclick="filterApproval('APPROVED', this)">Approved History</button>
@@ -384,7 +393,7 @@
     </main>
   </div>
 
-  <!-- Detail Modal -->
+  <!-- Detail Inspection Modal -->
   <div class="modal-overlay" id="invoiceModal">
     <div class="modal-content">
       <div class="modal-header">
@@ -393,6 +402,100 @@
       </div>
       <div class="modal-body" id="modalBody">
         <!-- Filled dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- USER SIGN UP & LOG IN AUTHENTICATION MODAL -->
+  <div class="modal-overlay" id="authModal">
+    <div class="modal-content auth-modal-box">
+      <div class="modal-header">
+        <div class="auth-header-title">
+          <span class="auth-logo-icon">🔒</span>
+          <div>
+            <h3 id="authModalHeading">MongoDB User Authentication</h3>
+            <p id="authModalSubheading">Sign in or register account stored in MongoDB database</p>
+          </div>
+        </div>
+        <button class="close-btn" onclick="closeAuthModal()">✕</button>
+      </div>
+
+      <!-- Auth Tabs: Sign In / Sign Up -->
+      <div class="auth-tabs">
+        <button class="auth-tab active" id="tabBtnSignIn" onclick="switchAuthTab('login')">🔑 Sign In</button>
+        <button class="auth-tab" id="tabBtnSignUp" onclick="switchAuthTab('signup')">📝 Create Account (Sign Up)</button>
+      </div>
+
+      <!-- Notification Message Alert -->
+      <div id="authAlert" class="auth-alert" style="display:none;"></div>
+
+      <div class="modal-body">
+        <!-- LOGIN FORM -->
+        <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="auth-form">
+          <div class="form-group">
+            <label for="loginEmail">Email Address</label>
+            <input type="email" id="loginEmail" class="form-input" placeholder="e.g. user@invoice.com or manager@invoice.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+          </div>
+
+          <button type="submit" class="btn primary auth-submit-btn">
+            Sign In & Connect Session
+          </button>
+        </form>
+
+        <!-- SIGN UP FORM -->
+        <form id="signupForm" onsubmit="handleSignupSubmit(event)" class="auth-form" style="display:none;">
+          <div class="form-group">
+            <label for="signupName">Full Name</label>
+            <input type="text" id="signupName" class="form-input" placeholder="e.g. Sarah Jenkins" required>
+          </div>
+
+          <div class="form-group">
+            <label for="signupEmail">Email Address</label>
+            <input type="email" id="signupEmail" class="form-input" placeholder="e.g. sarah@company.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="signupPassword">Password</label>
+            <input type="password" id="signupPassword" class="form-input" placeholder="••••••••" required minlength="6">
+          </div>
+
+          <div class="form-group">
+            <label for="signupRole">Account Access Role</label>
+            <select id="signupRole" class="form-input">
+              <option value="AP_CLERK">👤 Regular User / AP Clerk (Submit & View Invoices)</option>
+              <option value="FINANCE_MANAGER">👑 Management / Finance Manager (Approve & Reject)</option>
+              <option value="ADMIN">⚙️ System Admin (Full Database Access & Purge)</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn accent auth-submit-btn">
+            Register Account to MongoDB
+          </button>
+        </form>
+
+        <!-- PRE-CONFIGURED MANAGEMENT CREDENTIALS QUICK ASSIST -->
+        <div class="quick-credentials-panel">
+          <div class="panel-head">
+            <span>⚡ Quick Fill Credentials:</span>
+          </div>
+          <div class="quick-cred-buttons">
+            <button type="button" class="cred-chip chip-mgr" onclick="fillQuickCredentials('manager@invoice.com', 'admin123')">
+              👑 Management Login (manager@invoice.com / admin123)
+            </button>
+            <button type="button" class="cred-chip chip-user" onclick="fillQuickCredentials('user@invoice.com', 'user123')">
+              👤 User Login (user@invoice.com / user123)
+            </button>
+            <button type="button" class="cred-chip chip-admin" onclick="fillQuickCredentials('admin@invoice.com', 'admin123')">
+              ⚙️ Admin Login (admin@invoice.com / admin123)
+            </button>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>

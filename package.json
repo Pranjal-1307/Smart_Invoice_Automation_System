@@ -9,7 +9,9 @@
     "test:robot": "python run_robot.py api"
   },
   "dependencies": {
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
-    "express": "^4.22.2"
+    "express": "^4.22.2",
+    "mongoose": "^9.9.2"
   }
 }

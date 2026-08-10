@@ -1,13 +1,206 @@
 let currentInvoices = [];
 let currentFilter = 'PENDING';
 let currentRole = 'FINANCE_MANAGER'; // Default role: FINANCE_MANAGER, AP_CLERK, ADMIN
+let currentUser = null;
 
 document.addEventListener('DOMContentLoaded', () => {
+  initAuth();
   initNav();
   initDragAndDrop();
   fetchInvoices();
-  switchRole('FINANCE_MANAGER', false);
 });
+
+// AUTHENTICATION SYSTEM MANAGEMENT
+
+function initAuth() {
+  const savedUser = localStorage.getItem('currentUser');
+  if (savedUser) {
+    try {
+      currentUser = JSON.parse(savedUser);
+    } catch (e) {
+      currentUser = null;
+    }
+  }
+
+  if (!currentUser) {
+    // Default Guest Session
+    currentUser = {
+      name: 'Guest User',
+      email: 'guest@invoice.com',
+      role: 'AP_CLERK'
+    };
+  }
+
+  updateAuthUserUI();
+}
+
+function updateAuthUserUI() {
+  const userNameLabel = document.getElementById('userNameLabel');
+  const userRoleBadge = document.getElementById('userRoleBadge');
+  const btnAuthAction = document.getElementById('btnAuthAction');
+
+  if (userNameLabel) userNameLabel.textContent = currentUser.name;
+  
+  const roleDisplayNames = {
+    'AP_CLERK': 'Accounts Payable (AP Clerk)',
+    'FINANCE_MANAGER': 'Finance Manager',
+    'ADMIN': 'System Admin'
+  };
+
+  if (userRoleBadge) {
+    userRoleBadge.textContent = roleDisplayNames[currentUser.role] || currentUser.role;
+  }
+
+  if (btnAuthAction) {
+    if (currentUser.email === 'guest@invoice.com') {
+      btnAuthAction.textContent = '🔑 Sign In / Sign Up';
+      btnAuthAction.className = 'btn sm primary auth-action-btn';
+    } else {
+      btnAuthAction.textContent = '🚪 Sign Out';
+      btnAuthAction.className = 'btn sm ghost auth-action-btn';
+    }
+  }
+
+  // Sync role with logged-in user
+  switchRole(currentUser.role, false);
+}
+
+function handleAuthButtonClick() {
+  if (currentUser && currentUser.email !== 'guest@invoice.com') {
+    const confirmLogout = confirm(`Log out from account ${currentUser.email}?`);
+    if (confirmLogout) {
+      localStorage.removeItem('currentUser');
+      currentUser = {
+        name: 'Guest User',
+        email: 'guest@invoice.com',
+        role: 'AP_CLERK'
+      };
+      updateAuthUserUI();
+      appendLog(`[AUTH] User logged out.`);
+    }
+  } else {
+    openAuthModal();
+  }
+}
+
+function openAuthModal() {
+  const modal = document.getElementById('authModal');
+  if (modal) {
+    modal.classList.add('active');
+    hideAuthAlert();
+  }
+}
+
+function closeAuthModal() {
+  const modal = document.getElementById('authModal');
+  if (modal) modal.classList.remove('active');
+}
+
+function switchAuthTab(tab) {
+  const tabSignIn = document.getElementById('tabBtnSignIn');
+  const tabSignUp = document.getElementById('tabBtnSignUp');
+  const loginForm = document.getElementById('loginForm');
+  const signupForm = document.getElementById('signupForm');
+  const modalHeading = document.getElementById('authModalHeading');
+  const modalSubheading = document.getElementById('authModalSubheading');
+
+  hideAuthAlert();
+
+  if (tab === 'login') {
+    tabSignIn.classList.add('active');
+    tabSignUp.classList.remove('active');
+    loginForm.style.display = 'flex';
+    signupForm.style.display = 'none';
+    modalHeading.textContent = 'MongoDB User Sign In';
+    modalSubheading.textContent = 'Enter credentials stored in MongoDB database';
+  } else {
+    tabSignUp.classList.add('active');
+    tabSignIn.classList.remove('active');
+    signupForm.style.display = 'flex';
+    loginForm.style.display = 'none';
+    modalHeading.textContent = 'Register MongoDB Account';
+    modalSubheading.textContent = 'Create a new user or management account in MongoDB';
+  }
+}
+
+function fillQuickCredentials(email, password) {
+  switchAuthTab('login');
+  document.getElementById('loginEmail').value = email;
+  document.getElementById('loginPassword').value = password;
+  showAuthAlert(`Filled credentials for ${email}. Click "Sign In" to connect.`, 'success');
+}
+
+function showAuthAlert(msg, type = 'error') {
+  const alertBox = document.getElementById('authAlert');
+  if (alertBox) {
+    alertBox.style.display = 'block';
+    alertBox.className = `auth-alert ${type}`;
+    alertBox.textContent = msg;
+  }
+}
+
+function hideAuthAlert() {
+  const alertBox = document.getElementById('authAlert');
+  if (alertBox) alertBox.style.display = 'none';
+}
+
+async function handleLoginSubmit(event) {
+  event.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+
+  try {
+    showAuthAlert('Authenticating credentials with MongoDB...', 'success');
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      currentUser = data.user;
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      updateAuthUserUI();
+      closeAuthModal();
+      appendLog(`[AUTH_SUCCESS] Logged in as ${currentUser.name} (${currentUser.role})`);
+    } else {
+      showAuthAlert(data.message || 'Login failed', 'error');
+    }
+  } catch (err) {
+    showAuthAlert('Connection error: ' + err.message, 'error');
+  }
+}
+
+async function handleSignupSubmit(event) {
+  event.preventDefault();
+  const name = document.getElementById('signupName').value;
+  const email = document.getElementById('signupEmail').value;
+  const password = document.getElementById('signupPassword').value;
+  const role = document.getElementById('signupRole').value;
+
+  try {
+    showAuthAlert('Saving account into MongoDB collection...', 'success');
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password, role })
+    });
+
+    const data = await res.json();
+    if (data.success) {
+      currentUser = data.user;
+      localStorage.setItem('currentUser', JSON.stringify(currentUser));
+      updateAuthUserUI();
+      closeAuthModal();
+      appendLog(`[SIGNUP_SUCCESS] Account registered in MongoDB for ${currentUser.email} (${currentUser.role})`);
+    } else {
+      showAuthAlert(data.message || 'Registration failed', 'error');
+    }
+  } catch (err) {
+    showAuthAlert('Connection error: ' + err.message, 'error');
+  }
+}
 
 // Role Switcher Logic & Dynamic UI Adaptation
 function switchRole(roleId, autoNavigate = true) {
@@ -35,12 +228,12 @@ function switchRole(roleId, autoNavigate = true) {
     roleBanner.classList.add('banner-ap');
     roleIcon.textContent = '👤';
     roleTitle.textContent = 'Accounts Payable (AP Clerk) Portal Active';
-    roleDesc.textContent = 'Primary Duty: Ingest & upload invoice documents, batch files, and datasets. Approval sign-offs are reserved for Finance Manager.';
+    roleDesc.textContent = 'Primary Duty: Ingest & upload invoice documents, batch files, and datasets into MongoDB. Financial approval sign-offs are reserved for Finance Management.';
 
     if (inputNotice) inputNotice.style.display = 'none';
     if (approvalNotice) {
       approvalNotice.style.display = 'block';
-      approvalNotice.innerHTML = `<span>🔒 <strong>AP Clerk View:</strong> Approval actions are restricted. Switch role to Finance Manager to authorize invoices.</span>`;
+      approvalNotice.innerHTML = `<span>🔒 <strong>AP Clerk View:</strong> Approval actions are restricted. Switch to Finance Manager role to authorize invoices.</span>`;
     }
     if (mongoNotice) mongoNotice.style.display = 'none';
     if (btnBulkApprove) btnBulkApprove.style.display = 'none';
@@ -53,7 +246,7 @@ function switchRole(roleId, autoNavigate = true) {
     roleBanner.classList.add('banner-admin');
     roleIcon.textContent = '⚙️';
     roleTitle.textContent = 'System & RPA Admin Console Active';
-    roleDesc.textContent = 'Primary Duty: Pipeline log diagnostics, engine OCR threshold tuning, raw JSON inspection, and Database Purge operations.';
+    roleDesc.textContent = 'Primary Duty: Pipeline log diagnostics, engine OCR threshold tuning, raw JSON document inspection, and Database Purge operations.';
 
     if (inputNotice) {
       inputNotice.style.display = 'block';
@@ -75,7 +268,7 @@ function switchRole(roleId, autoNavigate = true) {
     roleBanner.classList.add('banner-manager');
     roleIcon.textContent = '👑';
     roleTitle.textContent = 'Finance Manager (Approver) Portal Active';
-    roleDesc.textContent = 'Primary Duty: Review pending invoices, inspect line items & tax breakdowns, and execute single or bulk Approve/Reject sign-offs.';
+    roleDesc.textContent = 'Primary Duty: Review pending invoices in MongoDB, inspect line items & tax breakdowns, and execute single or bulk Approve/Reject sign-offs.';
 
     if (inputNotice) {
       inputNotice.style.display = 'block';
@@ -93,7 +286,6 @@ function switchRole(roleId, autoNavigate = true) {
   // Refresh view contents to update role-sensitive buttons
   renderMongoDBTable();
   renderApprovalDesk();
-  appendLog(`[ROLE_CHANGE] Active role set to: ${roleId}`);
 }
 
 // Navigation handling
@@ -116,12 +308,11 @@ function switchTab(tabId) {
   const targetPage = document.getElementById(`tab-${tabId}`);
   if (targetPage) targetPage.classList.add('active');
 
-  // Update Page Header
   const titles = {
     workflow: { title: "Workflow Overview", sub: "Real-time tracking from Invoice Input to MongoDB & Approval" },
-    input: { title: "Invoice Input Stage (AP Clerk)", sub: "Submit Single PDF/IMG, Multiple PDF/IMG, or Dataset CSV/XLSX" },
+    input: { title: "Invoice Input Stage (AP Clerk)", sub: "Submit Single PDF/IMG, Multiple PDF/IMG, or Dataset CSV/XLSX into MongoDB" },
     engine: { title: "Processing Engine & Diagnostics (Admin)", sub: "OCR field extraction, rule validation & log inspection" },
-    mongodb: { title: "MongoDB Document Store (Admin & Audit)", sub: "Direct document collection viewer for invoices_db" },
+    mongodb: { title: "MongoDB Document Store (Admin & Audit)", sub: "Direct document collection viewer for smart_invoice_db" },
     approval: { title: "Approval Workflow Desk (Finance Manager)", sub: "Review pending invoices and execute manager decisions" }
   };
   if (titles[tabId]) {
@@ -169,7 +360,7 @@ function initDragAndDrop() {
       e.preventDefault();
       e.stopPropagation();
       if (currentRole !== 'AP_CLERK') {
-        alert("🔒 Permission Notice: Invoice uploading is restricted to AP Clerk role. Switch role to AP Clerk in top header.");
+        alert("🔒 Permission Notice: Invoice uploading is restricted to AP Clerk role.");
         return;
       }
       const dt = e.dataTransfer;
@@ -194,7 +385,7 @@ function handleFileSelect(event, inputType) {
 }
 
 async function processUploadedFiles(files, inputType) {
-  appendLog(`[FILE_INGEST] Processing ${files.length} file(s) for ${inputType} by ${currentRole}...`);
+  appendLog(`[FILE_INGEST] Processing ${files.length} file(s) for ${inputType} by ${currentUser ? currentUser.email : currentRole}...`);
 
   const previewIdMap = {
     'SINGLE_PDF': 'singleFilePreview',
@@ -214,19 +405,18 @@ async function processUploadedFiles(files, inputType) {
         </div>
       `).join('')}
       <button class="btn sm primary" style="width:100%; margin-top:8px;" onclick="uploadAndExtractFiles('${inputType}')">
-        ⚡ Upload & Extract Data (${files.length})
+        ⚡ Upload & Store in MongoDB (${files.length})
       </button>
     `;
   }
 
-  // Save selected files globally for upload trigger
   window.pendingUploadFiles = window.pendingUploadFiles || {};
   window.pendingUploadFiles[inputType] = files;
 }
 
 async function uploadAndExtractFiles(inputType) {
   if (currentRole !== 'AP_CLERK') {
-    alert("🔒 Role Notice: Upload operations are restricted to Accounts Payable (AP Clerk). Please switch active role.");
+    alert("🔒 Role Notice: Upload operations are restricted to Accounts Payable (AP Clerk).");
     return;
   }
 
@@ -245,7 +435,6 @@ async function uploadAndExtractFiles(inputType) {
     });
   }
 
-  // Clear preview
   const previewIdMap = {
     'SINGLE_PDF': 'singleFilePreview',
     'MULTIPLE_PDF': 'multiFilePreview',
@@ -262,13 +451,13 @@ function readFileContent(file) {
       reader.onload = (e) => resolve(e.target.result);
       reader.readAsText(file);
     } else {
-      reader.onload = (e) => resolve(e.target.result); // Base64 Data URL
+      reader.onload = (e) => resolve(e.target.result);
       reader.readAsDataURL(file);
     }
   });
 }
 
-// Fetch invoices from backend Express server
+// Fetch invoices from backend Express server (Real MongoDB)
 async function fetchInvoices() {
   try {
     const [invRes, statsRes] = await Promise.all([
@@ -293,6 +482,13 @@ async function fetchInvoices() {
       document.getElementById('statAccuracy').textContent = `${stats.avgConfidence.toFixed(1)}%`;
       document.getElementById('statPendingCount').textContent = stats.pending;
       document.getElementById('pendingBadge').textContent = stats.pending;
+
+      const mongoInd = document.getElementById('mongoDbIndicator');
+      const mongoSub = document.getElementById('mongoDbSub');
+      if (statsData.mongoConnected) {
+        if (mongoInd) mongoInd.className = 'status-indicator online';
+        if (mongoSub) mongoSub.innerHTML = 'Connected to <code>smart_invoice_db</code>';
+      }
     }
   } catch (err) {
     console.error("Error fetching data:", err);
@@ -302,7 +498,7 @@ async function fetchInvoices() {
 // Trigger Processing Engine Pipeline
 async function triggerProcess(inputType, fileName, fileData = null) {
   try {
-    appendLog(`[PROCESSING_TRIGGER] Ingestion by ${currentRole}: ${inputType} for file "${fileName}"...`);
+    appendLog(`[PROCESSING_TRIGGER] Ingestion by ${currentUser ? currentUser.email : currentRole}: ${inputType} for file "${fileName}"...`);
     switchTab('engine');
 
     const payload = {
@@ -312,11 +508,14 @@ async function triggerProcess(inputType, fileName, fileData = null) {
       role: currentRole
     };
 
+    const userEmailHeader = currentUser ? currentUser.email : 'user@invoice.com';
+
     const res = await fetch('/api/process', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-User-Role': currentRole
+        'X-User-Role': currentRole,
+        'X-User-Email': userEmailHeader
       },
       body: JSON.stringify(payload)
     });
@@ -324,7 +523,7 @@ async function triggerProcess(inputType, fileName, fileData = null) {
     const data = await res.json();
     if (data.success) {
       data.processed.forEach(item => {
-        appendLog(`[SUCCESS] Extracted Invoice: ${item.invoiceNumber} | Vendor: ${item.vendor} | Total: $${item.total.toFixed(2)} | Confidence: ${(item.confidenceScore*100).toFixed(0)}%`);
+        appendLog(`[MONGO_SAVED] Invoice: ${item.invoiceNumber} | Vendor: ${item.vendor} | Total: $${item.total.toFixed(2)} | Saved into MongoDB 'invoices' collection`);
       });
       fetchInvoices();
     }
@@ -349,13 +548,13 @@ function clearLogsConsole() {
 function simulateEngineDiagnostic() {
   appendLog(`[ADMIN_DIAGNOSTIC] Running system OCR layout checks & pattern matching validation...`);
   appendLog(`[ADMIN_DIAGNOSTIC] OCR Threshold set to ${document.getElementById('ocrConfidenceRange').value}%`);
-  appendLog(`[ADMIN_DIAGNOSTIC] Database collection index state: HEALTHY (3 indexes verified)`);
+  appendLog(`[ADMIN_DIAGNOSTIC] MongoDB Collection index state: HEALTHY (Verified with smart_invoice_db)`);
 }
 
 function updateLogsConsole() {
   const consoleEl = document.getElementById('consoleLogs');
   if (!consoleEl.textContent.trim()) {
-    consoleEl.textContent = `[ENGINE_STANDBY] Active monitoring enabled. Pipeline ready.`;
+    consoleEl.textContent = `[ENGINE_STANDBY] Active monitoring enabled. Pipeline ready for MongoDB sync.`;
   }
 }
 
@@ -400,28 +599,32 @@ function renderMongoDBTable() {
         <small style="color:var(--text-muted)">${inv.vendorEmail}</small>
       </td>
       <td><strong>$${inv.total.toFixed(2)}</strong></td>
-      <td>${(inv.confidenceScore * 100).toFixed(0)}%</td>
+      <td>
+        <div class="confidence-bar-container">
+          <div class="confidence-fill ${inv.confidenceScore >= 0.95 ? 'high' : 'med'}" style="width: ${inv.confidenceScore * 100}%"></div>
+        </div>
+        <small style="font-size:11px;">${(inv.confidenceScore * 100).toFixed(0)}%</small>
+      </td>
       <td><span class="badge-status ${inv.status}">${inv.status}</span></td>
       <td>
-        <button class="btn xs secondary" onclick="inspectLogs('${inv.id}')">Logs (${inv.processingLogs.length})</button>
+        <button class="btn xs ghost" onclick="inspectLogs('${inv.id}')">📜 Logs (${inv.processingLogs.length})</button>
       </td>
       <td>
-        <button class="btn xs primary" onclick="inspectInvoice('${inv.id}')">Inspect</button>
-        ${currentRole === 'ADMIN' ? `<button class="btn xs ghost" style="color:var(--secondary);" onclick="inspectJson('${inv.id}')">JSON</button>` : ''}
+        <div class="action-buttons-cell">
+          <button class="btn xs secondary" onclick="inspectInvoice('${inv.id}')">👁️ Inspect</button>
+          ${currentRole === 'ADMIN' ? `<button class="btn xs accent" onclick="inspectJson('${inv.id}')">JSON</button>` : ''}
+          ${currentRole === 'FINANCE_MANAGER' && inv.status === 'PENDING' ? `
+            <button class="btn xs primary" onclick="approveInvoice('${inv.id}')">Approve</button>
+            <button class="btn xs danger" onclick="rejectInvoice('${inv.id}')">Reject</button>
+          ` : ''}
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-// Render Approval Desk Cards
-function filterApproval(status, btn) {
-  currentFilter = status;
-  document.querySelectorAll('.desk-filters .tab-btn').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  renderApprovalDesk();
-}
-
+// Render Approval Desk Grid
 function renderApprovalDesk() {
   const grid = document.getElementById('approvalCardsGrid');
   grid.innerHTML = '';
@@ -429,82 +632,91 @@ function renderApprovalDesk() {
   const filtered = currentInvoices.filter(i => i.status === currentFilter);
 
   if (filtered.length === 0) {
-    grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding: 40px; color: var(--text-muted);">
-      No invoices found in <strong>${currentFilter}</strong> stage.
-    </div>`;
+    grid.innerHTML = `
+      <div style="grid-column: 1/-1; text-align:center; padding: 48px; background:var(--bg-panel); border-radius:var(--radius-lg); border:1px dashed var(--border-color);">
+        <p style="color:var(--text-muted); font-size:16px;">No invoices found matching status: <strong>${currentFilter}</strong></p>
+      </div>
+    `;
     return;
   }
 
   filtered.forEach(inv => {
     const card = document.createElement('div');
-    card.className = 'approval-card';
+    card.className = `approval-card status-${inv.status.toLowerCase()}`;
 
-    const isManager = currentRole === 'FINANCE_MANAGER';
-    const isAp = currentRole === 'AP_CLERK';
+    const isHighConf = inv.confidenceScore >= 0.95;
 
     card.innerHTML = `
-      <div>
-        <div class="card-top">
-          <div>
-            <div class="inv-num">${inv.invoiceNumber}</div>
-            <div class="vendor-name">${inv.vendor}</div>
-          </div>
-          <span class="badge-status ${inv.status}">${inv.status}</span>
+      <div class="card-top">
+        <span class="inv-badge">${inv.id}</span>
+        <span class="badge-status ${inv.status}">${inv.status}</span>
+      </div>
+      <div class="vendor-title">${inv.vendor}</div>
+      <div class="inv-amount">$${inv.total.toFixed(2)}</div>
+      
+      <div class="inv-meta-grid">
+        <div>
+          <span class="lbl">Invoice Number</span>
+          <span class="val">${inv.invoiceNumber}</span>
         </div>
-
-        <div class="amount-box">
-          <div>
-            <span style="font-size:11px; color:var(--text-muted);">TOTAL INVOICE</span>
-            <div class="val">$${inv.total.toFixed(2)}</div>
-          </div>
-          <div style="text-align:right;">
-            <span style="font-size:11px; color:var(--text-muted);">CONFIDENCE</span>
-            <div style="color:var(--accent); font-weight:700;">${(inv.confidenceScore * 100).toFixed(0)}%</div>
-          </div>
+        <div>
+          <span class="lbl">DueDate</span>
+          <span class="val">${inv.dueDate}</span>
         </div>
+      </div>
 
-        <div style="font-size:12px; color:var(--text-muted); margin-bottom: 12px;">
-          📅 Due Date: ${inv.dueDate} | File: <code>${inv.filename}</code>
+      <div class="confidence-section">
+        <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;">
+          <span>Confidence Score</span>
+          <strong style="color:${isHighConf ? 'var(--accent)' : 'var(--warning)'}">${(inv.confidenceScore * 100).toFixed(0)}%</strong>
+        </div>
+        <div class="confidence-bar-container">
+          <div class="confidence-fill ${isHighConf ? 'high' : 'med'}" style="width: ${inv.confidenceScore * 100}%"></div>
         </div>
       </div>
 
       <div class="card-actions">
-        <button class="btn sm secondary" onclick="inspectInvoice('${inv.id}')">Details</button>
-        ${inv.status === 'PENDING' ? `
-          <button class="btn sm accent" ${!isManager ? 'style="opacity:0.6; cursor:not-allowed;" title="Finance Manager role required"' : ''} onclick="approveInvoice('${inv.id}')">
-            ${isManager ? 'Approve' : '🔒 Approve'}
-          </button>
-          <button class="btn sm secondary" style="color:var(--danger); ${!isManager ? 'opacity:0.6; cursor:not-allowed;' : ''}" title="${!isManager ? 'Finance Manager role required' : ''}" onclick="rejectInvoice('${inv.id}')">
-            ${isManager ? 'Reject' : '🔒 Reject'}
-          </button>
-        ` : `
-          <button class="btn sm secondary" style="grid-column: span 2;" disabled>Processed</button>
-        `}
+        <button class="btn sm secondary" onclick="inspectInvoice('${inv.id}')">Inspect Document</button>
+        ${currentRole === 'FINANCE_MANAGER' && inv.status === 'PENDING' ? `
+          <button class="btn sm primary" onclick="approveInvoice('${inv.id}')">Approve</button>
+          <button class="btn sm danger" onclick="rejectInvoice('${inv.id}')">Reject</button>
+        ` : ''}
       </div>
     `;
+
     grid.appendChild(card);
   });
+}
+
+function filterApproval(status, btnEl) {
+  currentFilter = status;
+  document.querySelectorAll('.desk-filters .tab-btn').forEach(b => b.classList.remove('active'));
+  if (btnEl) btnEl.classList.add('active');
+  renderApprovalDesk();
 }
 
 // Single Invoice Approval (Finance Manager Duty)
 async function approveInvoice(id) {
   if (currentRole === 'AP_CLERK') {
-    alert("🔒 Role Restriction: Accounts Payable (AP Clerk) is not authorized to approve invoices. Switch active role to Finance Manager.");
+    alert("🔒 Role Restriction: Accounts Payable (AP Clerk) is restricted from approving invoices. Switch active role to Finance Manager.");
     return;
   }
+
+  const userEmailHeader = currentUser ? currentUser.email : 'manager@invoice.com';
 
   try {
     const res = await fetch('/api/approve', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-User-Role': currentRole
+        'X-User-Role': currentRole,
+        'X-User-Email': userEmailHeader
       },
-      body: JSON.stringify({ id, notes: `Approved via Approval Desk by ${currentRole}`, role: currentRole })
+      body: JSON.stringify({ id, notes: `Approved via Approval Desk by ${userEmailHeader} (${currentRole})`, role: currentRole })
     });
     const data = await res.json();
     if (data.success) {
-      appendLog(`[APPROVAL] Invoice ${id} approved by ${currentRole}.`);
+      appendLog(`[APPROVAL] Invoice ${id} approved in MongoDB by ${userEmailHeader}.`);
       fetchInvoices();
     } else {
       alert(`Approval error: ${data.message}`);
@@ -527,21 +739,24 @@ async function executeBulkApproval() {
     return;
   }
 
-  const confirmBulk = confirm(`⚡ Confirm Bulk Approval:\n\nApprove ${pendingCount} pending invoice(s) with confidence score ≥ 95%?`);
+  const confirmBulk = confirm(`⚡ Confirm Bulk Approval in MongoDB:\n\nApprove ${pendingCount} pending invoice(s) with confidence score ≥ 95%?`);
   if (!confirmBulk) return;
+
+  const userEmailHeader = currentUser ? currentUser.email : 'manager@invoice.com';
 
   try {
     const res = await fetch('/api/approve-bulk', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-User-Role': currentRole
+        'X-User-Role': currentRole,
+        'X-User-Email': userEmailHeader
       },
       body: JSON.stringify({ role: currentRole, minConfidence: 0.95 })
     });
     const data = await res.json();
     if (data.success) {
-      appendLog(`[BULK_APPROVAL] ${data.approvedCount} invoice(s) bulk approved by Finance Manager.`);
+      appendLog(`[BULK_APPROVAL] ${data.approvedCount} invoice(s) bulk approved in MongoDB by ${userEmailHeader}.`);
       fetchInvoices();
     }
   } catch (err) {
@@ -559,18 +774,21 @@ async function rejectInvoice(id) {
   const reason = prompt("Enter rejection reason for Finance Manager audit log:");
   if (reason === null) return;
 
+  const userEmailHeader = currentUser ? currentUser.email : 'manager@invoice.com';
+
   try {
     const res = await fetch('/api/reject', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-User-Role': currentRole
+        'X-User-Role': currentRole,
+        'X-User-Email': userEmailHeader
       },
       body: JSON.stringify({ id, reason, role: currentRole })
     });
     const data = await res.json();
     if (data.success) {
-      appendLog(`[REJECTION] Invoice ${id} rejected by ${currentRole}. Reason: ${reason}`);
+      appendLog(`[REJECTION] Invoice ${id} rejected in MongoDB by ${userEmailHeader}. Reason: ${reason}`);
       fetchInvoices();
     } else {
       alert(`Rejection error: ${data.message}`);
@@ -587,21 +805,24 @@ async function confirmResetDatabase() {
     return;
   }
 
-  const firstWarning = confirm("⚠️ ADMIN WARNING:\n\nAre you sure you want to purge and reset all invoice records in MongoDB?");
+  const firstWarning = confirm("⚠️ ADMIN WARNING:\n\nAre you sure you want to purge and reset all invoice records in MongoDB database 'smart_invoice_db'?");
   if (!firstWarning) return;
+
+  const userEmailHeader = currentUser ? currentUser.email : 'admin@invoice.com';
 
   try {
     const res = await fetch('/api/reset', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-User-Role': currentRole
+        'X-User-Role': currentRole,
+        'X-User-Email': userEmailHeader
       },
       body: JSON.stringify({ role: currentRole })
     });
     const data = await res.json();
     if (data.success) {
-      appendLog(`[ADMIN_ACTION] MongoDB invoices collection purged by System Admin.`);
+      appendLog(`[ADMIN_ACTION] MongoDB invoices collection purged by System Admin (${userEmailHeader}).`);
       fetchInvoices();
     } else {
       alert(`Reset error: ${data.message}`);

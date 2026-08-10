@@ -1,103 +1,167 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+
+const User = require('./models/User');
+const Invoice = require('./models/Invoice');
+const AuditLog = require('./models/AuditLog');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/smart_invoice_db';
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// In-Memory Database mimicking MongoDB Document Store
-let mongodbStore = {
-  invoices: [
-    {
-      id: "INV-2026-001",
-      invoiceNumber: "INV-98231",
-      inputType: "SINGLE_PDF",
-      filename: "Acme_Corp_Invoice.pdf",
-      vendor: "Acme Industrial Tools",
-      vendorEmail: "billing@acmeind.com",
-      date: "2026-08-01",
-      dueDate: "2026-08-15",
-      subtotal: 1250.00,
-      tax: 100.00,
-      total: 1350.00,
-      status: "PENDING", // PENDING, APPROVED, REJECTED, FLAGGED
-      confidenceScore: 0.96,
-      lineItems: [
-        { description: "Heavy Duty Hydraulic Pump", quantity: 2, unitPrice: 500.00, total: 1000.00 },
-        { description: "Maintenance Kit Standard", quantity: 1, unitPrice: 250.00, total: 250.00 }
-      ],
-      processingLogs: [
-        "Received single PDF file [Acme_Corp_Invoice.pdf]",
-        "OCR Extraction complete (Confidence: 96%)",
-        "Extracted 2 line items & totals verified",
-        "Saved document into MongoDB collection 'invoices'"
-      ],
-      createdAt: new Date("2026-08-01T10:30:00Z").toISOString(),
-      updatedAt: new Date("2026-08-01T10:30:00Z").toISOString()
-    },
-    {
-      id: "INV-2026-002",
-      invoiceNumber: "INV-44109",
-      inputType: "MULTIPLE_PDF",
-      filename: "GlobalLogistics_Batch_01.pdf",
-      vendor: "Global Logistics Ltd",
-      vendorEmail: "accounts@globallogistics.com",
-      date: "2026-08-05",
-      dueDate: "2026-08-20",
-      subtotal: 3400.00,
-      tax: 272.00,
-      total: 3672.00,
-      status: "PENDING",
-      confidenceScore: 0.92,
-      lineItems: [
-        { description: "Freight Transport NYC to CHI", quantity: 4, unitPrice: 750.00, total: 3000.00 },
-        { description: "Customs Clearance Fee", quantity: 1, unitPrice: 400.00, total: 400.00 }
-      ],
-      processingLogs: [
-        "Batch input file [GlobalLogistics_Batch_01.pdf] processed",
-        "Pattern matching engine extracted vendor details",
-        "Document validated & inserted to MongoDB"
-      ],
-      createdAt: new Date("2026-08-05T14:15:00Z").toISOString(),
-      updatedAt: new Date("2026-08-05T14:15:00Z").toISOString()
-    },
-    {
-      id: "INV-2026-003",
-      invoiceNumber: "INV-77312",
-      inputType: "DATASET_CSV",
-      filename: "Q3_Vendor_Dataset.csv",
-      vendor: "TechCloud Services",
-      vendorEmail: "finance@techcloud.io",
-      date: "2026-08-08",
-      dueDate: "2026-08-22",
-      subtotal: 890.00,
-      tax: 71.20,
-      total: 961.20,
-      status: "APPROVED",
-      confidenceScore: 0.99,
-      lineItems: [
-        { description: "Server Infrastructure Q3", quantity: 1, unitPrice: 890.00, total: 890.00 }
-      ],
-      processingLogs: [
-        "CSV Dataset row parsed successfully",
-        "Automated rule pass: high confidence (99%)",
-        "Direct approval auto-passed by system rule"
-      ],
-      createdAt: new Date("2026-08-08T09:00:00Z").toISOString(),
-      updatedAt: new Date("2026-08-08T09:05:00Z").toISOString()
+let isMongoConnected = false;
+
+// Connect to MongoDB
+mongoose.connect(MONGODB_URI)
+  .then(async () => {
+    isMongoConnected = true;
+    console.log(`Connected to MongoDB at ${MONGODB_URI}`);
+    await seedDatabase();
+  })
+  .catch(err => {
+    console.error(`MongoDB Connection Error: ${err.message}`);
+  });
+
+// Seed Initial Users & Sample Invoices if Database is empty
+async function seedDatabase() {
+  try {
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      console.log("Seeding default Management & User credentials into MongoDB...");
+      const salt = await bcrypt.genSalt(10);
+      
+      const adminPassword = await bcrypt.hash('admin123', salt);
+      const managerPassword = await bcrypt.hash('admin123', salt);
+      const userPassword = await bcrypt.hash('user123', salt);
+
+      await User.insertMany([
+        {
+          name: "System Admin",
+          email: "admin@invoice.com",
+          password: adminPassword,
+          role: "ADMIN"
+        },
+        {
+          name: "Finance Management Head",
+          email: "manager@invoice.com",
+          password: managerPassword,
+          role: "FINANCE_MANAGER"
+        },
+        {
+          name: "John AP Clerk",
+          email: "user@invoice.com",
+          password: userPassword,
+          role: "AP_CLERK"
+        }
+      ]);
+      console.log("Default users seeded in MongoDB successfully.");
     }
-  ],
-  auditLogs: [
-    { timestamp: new Date().toISOString(), action: "SYSTEM_INIT", details: "MongoDB store initialized with sample dataset" }
-  ]
-};
+
+    const invoiceCount = await Invoice.countDocuments();
+    if (invoiceCount === 0) {
+      console.log("Seeding initial sample invoices into MongoDB...");
+      await Invoice.insertMany([
+        {
+          id: "INV-2026-001",
+          invoiceNumber: "INV-98231",
+          inputType: "SINGLE_PDF",
+          filename: "Acme_Corp_Invoice.pdf",
+          vendor: "Acme Industrial Tools",
+          vendorEmail: "billing@acmeind.com",
+          date: "2026-08-01",
+          dueDate: "2026-08-15",
+          subtotal: 1250.00,
+          tax: 100.00,
+          total: 1350.00,
+          status: "PENDING",
+          confidenceScore: 0.96,
+          lineItems: [
+            { description: "Heavy Duty Hydraulic Pump", quantity: 2, unitPrice: 500.00, total: 1000.00 },
+            { description: "Maintenance Kit Standard", quantity: 1, unitPrice: 250.00, total: 250.00 }
+          ],
+          processingLogs: [
+            "Received single PDF file [Acme_Corp_Invoice.pdf]",
+            "OCR Extraction complete (Confidence: 96%)",
+            "Extracted 2 line items & totals verified",
+            "Saved document into MongoDB collection 'invoices'"
+          ],
+          createdAt: new Date("2026-08-01T10:30:00Z"),
+          updatedAt: new Date("2026-08-01T10:30:00Z")
+        },
+        {
+          id: "INV-2026-002",
+          invoiceNumber: "INV-44109",
+          inputType: "MULTIPLE_PDF",
+          filename: "GlobalLogistics_Batch_01.pdf",
+          vendor: "Global Logistics Ltd",
+          vendorEmail: "accounts@globallogistics.com",
+          date: "2026-08-05",
+          dueDate: "2026-08-20",
+          subtotal: 3400.00,
+          tax: 272.00,
+          total: 3672.00,
+          status: "PENDING",
+          confidenceScore: 0.92,
+          lineItems: [
+            { description: "Freight Transport NYC to CHI", quantity: 4, unitPrice: 750.00, total: 3000.00 },
+            { description: "Customs Clearance Fee", quantity: 1, unitPrice: 400.00, total: 400.00 }
+          ],
+          processingLogs: [
+            "Batch input file [GlobalLogistics_Batch_01.pdf] processed",
+            "Pattern matching engine extracted vendor details",
+            "Document validated & inserted to MongoDB"
+          ],
+          createdAt: new Date("2026-08-05T14:15:00Z"),
+          updatedAt: new Date("2026-08-05T14:15:00Z")
+        },
+        {
+          id: "INV-2026-003",
+          invoiceNumber: "INV-77312",
+          inputType: "DATASET_CSV",
+          filename: "Q3_Vendor_Dataset.csv",
+          vendor: "TechCloud Services",
+          vendorEmail: "finance@techcloud.io",
+          date: "2026-08-08",
+          dueDate: "2026-08-22",
+          subtotal: 890.00,
+          tax: 71.20,
+          total: 961.20,
+          status: "APPROVED",
+          confidenceScore: 0.99,
+          lineItems: [
+            { description: "Server Infrastructure Q3", quantity: 1, unitPrice: 890.00, total: 890.00 }
+          ],
+          processingLogs: [
+            "CSV Dataset row parsed successfully",
+            "Automated rule pass: high confidence (99%)",
+            "Direct approval auto-passed by system rule"
+          ],
+          createdAt: new Date("2026-08-08T09:00:00Z"),
+          updatedAt: new Date("2026-08-08T09:05:00Z")
+        }
+      ]);
+      console.log("Sample invoices seeded in MongoDB.");
+    }
+
+    await AuditLog.create({
+      action: "SYSTEM_INIT",
+      details: "MongoDB database initialized and verified with schemas",
+      userEmail: "system"
+    });
+  } catch (err) {
+    console.error("Seeding error:", err);
+  }
+}
 
 // CSV Parser helper
-function parseCsvContent(rawCsvText, filename) {
+async function parseCsvContent(rawCsvText, filename, userEmail) {
   const lines = rawCsvText.split(/\r?\n/).filter(line => line.trim().length > 0);
   const createdInvoices = [];
   
@@ -107,9 +171,10 @@ function parseCsvContent(rawCsvText, filename) {
   const hasHeader = header.includes('vendor') || header.includes('amount') || header.includes('total') || header.includes('invoice');
   const dataLines = hasHeader ? lines.slice(1) : lines;
 
-  dataLines.forEach((line, idx) => {
+  for (let idx = 0; idx < dataLines.length; idx++) {
+    const line = dataLines[idx];
     const cols = line.split(/[,;\t]/).map(c => c.trim().replace(/^["']|["']$/g, ''));
-    if (cols.length < 2) return;
+    if (cols.length < 2) continue;
 
     let vendor = cols[0] || `Vendor ${idx + 1}`;
     let invNum = cols[1] && cols[1].startsWith('INV') ? cols[1] : `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -120,7 +185,7 @@ function parseCsvContent(rawCsvText, filename) {
     const tax = parseFloat((total - subtotal).toFixed(2));
     const confidence = parseFloat((0.92 + Math.random() * 0.07).toFixed(2));
 
-    const invoice = {
+    const invoiceObj = {
       id: `INV-2026-${Math.floor(100 + Math.random() * 900)}`,
       invoiceNumber: invNum,
       inputType: "DATASET_CSV",
@@ -143,29 +208,28 @@ function parseCsvContent(rawCsvText, filename) {
         `Calculated Total ($${total}) from spreadsheet column`,
         `Direct document inserted into MongoDB 'invoices' collection`
       ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdBy: userEmail || 'AP Clerk',
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
-    mongodbStore.invoices.unshift(invoice);
-    createdInvoices.push(invoice);
-  });
+    const doc = await Invoice.create(invoiceObj);
+    createdInvoices.push(doc);
+  }
 
   if (createdInvoices.length === 0) {
-    // Fallback if structure was unknown
-    return runProcessingEngine({ type: "DATASET_CSV", name: filename });
+    return await runProcessingEngine({ type: "DATASET_CSV", name: filename, userEmail });
   }
 
   return createdInvoices;
 }
 
 // Processing Engine Helper
-function runProcessingEngine(inputData) {
-  const { type, name, fileData } = inputData;
+async function runProcessingEngine(inputData) {
+  const { type, name, fileData, userEmail } = inputData;
 
-  // Handle uploaded CSV / Text files directly
   if (fileData && fileData.rawContent && typeof fileData.rawContent === 'string' && !fileData.rawContent.startsWith('data:')) {
-    return parseCsvContent(fileData.rawContent, name);
+    return await parseCsvContent(fileData.rawContent, name, userEmail);
   }
 
   const count = type === 'MULTIPLE_PDF' ? Math.floor(Math.random() * 3) + 2 : 1;
@@ -187,7 +251,7 @@ function runProcessingEngine(inputData) {
     const total = parseFloat((subtotal + tax).toFixed(2));
     const confidence = parseFloat((0.88 + Math.random() * 0.11).toFixed(2));
 
-    const invoice = {
+    const invoiceObj = {
       id: `INV-2026-${Math.floor(100 + Math.random() * 900)}`,
       invoiceNumber: randomInvNum,
       inputType: type,
@@ -202,8 +266,8 @@ function runProcessingEngine(inputData) {
       status: confidence > 0.94 ? "APPROVED" : "PENDING",
       confidenceScore: confidence,
       lineItems: [
-        { description: "Professional Services & Operations", quantity: 1, unitPrice: subtotal * 0.7, total: parseFloat((subtotal * 0.7).toFixed(2)) },
-        { description: "Software Licensing & Support", quantity: 1, unitPrice: subtotal * 0.3, total: parseFloat((subtotal * 0.3).toFixed(2)) }
+        { description: "Professional Services & Operations", quantity: 1, unitPrice: parseFloat((subtotal * 0.7).toFixed(2)), total: parseFloat((subtotal * 0.7).toFixed(2)) },
+        { description: "Software Licensing & Support", quantity: 1, unitPrice: parseFloat((subtotal * 0.3).toFixed(2)), total: parseFloat((subtotal * 0.3).toFixed(2)) }
       ],
       processingLogs: [
         `Received ${type} file payload [${name || 'Document'}]`,
@@ -212,161 +276,288 @@ function runProcessingEngine(inputData) {
         `Verified Totals: Subtotal ($${subtotal}) + Tax ($${tax}) = Grand Total ($${total})`,
         `Saved document into MongoDB collection 'invoices' with status: ${confidence > 0.94 ? 'APPROVED' : 'PENDING'}`
       ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdBy: userEmail || 'AP Clerk',
+      createdAt: new Date(),
+      updatedAt: new Date()
     };
 
-    mongodbStore.invoices.unshift(invoice);
-    createdInvoices.push(invoice);
+    const doc = await Invoice.create(invoiceObj);
+    createdInvoices.push(doc);
   }
 
-  mongodbStore.auditLogs.unshift({
-    timestamp: new Date().toISOString(),
+  await AuditLog.create({
     action: "PROCESSING_ENGINE_RUN",
-    details: `Processed ${type} input (${createdInvoices.length} invoices generated from ${name || 'upload'})`
+    details: `Processed ${type} input (${createdInvoices.length} invoices inserted to MongoDB)`,
+    userEmail: userEmail || 'system'
   });
 
   return createdInvoices;
 }
 
-// API Routes
-app.get('/api/invoices', (req, res) => {
-  res.json({
-    success: true,
-    count: mongodbStore.invoices.length,
-    invoices: mongodbStore.invoices
-  });
-});
+// AUTH API ENDPOINTS
 
-app.get('/api/stats', (req, res) => {
-  const invoices = mongodbStore.invoices;
-  const stats = {
-    totalInvoices: invoices.length,
-    pending: invoices.filter(i => i.status === 'PENDING').length,
-    approved: invoices.filter(i => i.status === 'APPROVED').length,
-    rejected: invoices.filter(i => i.status === 'REJECTED').length,
-    totalValue: invoices.reduce((acc, i) => acc + i.total, 0),
-    avgConfidence: invoices.length > 0 ? (invoices.reduce((acc, i) => acc + i.confidenceScore, 0) / invoices.length) * 100 : 0
-  };
-  res.json({ success: true, stats });
-});
+// Signup Endpoint
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { name, email, password, role } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ success: false, message: "Name, email, and password are required." });
+    }
 
-app.post('/api/process', (req, res) => {
-  const { inputType, fileName, fileData, role } = req.body;
-  const userRole = req.headers['x-user-role'] || role || 'AP_CLERK';
+    const existingUser = await User.findOne({ email: email.toLowerCase().trim() });
+    if (existingUser) {
+      return res.status(400).json({ success: false, message: "An account with this email already exists." });
+    }
 
-  if (!inputType) {
-    return res.status(400).json({ success: false, message: "inputType is required" });
-  }
-  const results = runProcessingEngine({ type: inputType, name: fileName, fileData, userRole });
-  res.json({ success: true, message: `Processing Engine executed successfully`, processed: results });
-});
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
 
-app.post('/api/approve', (req, res) => {
-  const { id, notes, role } = req.body;
-  const userRole = req.headers['x-user-role'] || role || 'FINANCE_MANAGER';
+    const userRole = role && ['AP_CLERK', 'FINANCE_MANAGER', 'ADMIN'].includes(role) ? role : 'AP_CLERK';
 
-  // Role validation: AP_CLERK cannot approve
-  if (userRole === 'AP_CLERK') {
-    return res.status(403).json({
-      success: false,
-      message: "Permission Denied: AP Clerk role is restricted from approving invoices. Finance Manager role required."
+    const newUser = await User.create({
+      name,
+      email: email.toLowerCase().trim(),
+      password: hashedPassword,
+      role: userRole
     });
+
+    await AuditLog.create({
+      action: "USER_SIGNUP",
+      details: `New account created: ${newUser.email} with role [${newUser.role}]`,
+      userEmail: newUser.email
+    });
+
+    res.json({
+      success: true,
+      message: "Account registered successfully in MongoDB!",
+      user: {
+        id: newUser._id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role
+      }
+    });
+  } catch (err) {
+    console.error("Signup error:", err);
+    res.status(500).json({ success: false, message: "Server error during registration." });
   }
-
-  const inv = mongodbStore.invoices.find(i => i.id === id);
-  if (!inv) return res.status(404).json({ success: false, message: "Invoice not found" });
-
-  inv.status = "APPROVED";
-  inv.updatedAt = new Date().toISOString();
-  inv.processingLogs.push(`Approved by ${userRole} at ${new Date().toLocaleTimeString()} ${notes ? `(Note: ${notes})` : ''}`);
-
-  mongodbStore.auditLogs.unshift({
-    timestamp: new Date().toISOString(),
-    action: "INVOICE_APPROVED",
-    details: `Invoice ${id} approved by role [${userRole}]`
-  });
-
-  res.json({ success: true, invoice: inv });
 });
 
-app.post('/api/approve-bulk', (req, res) => {
-  const { role, minConfidence } = req.body;
-  const userRole = req.headers['x-user-role'] || role || 'FINANCE_MANAGER';
+// Login Endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: "Email and password are required." });
+    }
 
-  if (userRole === 'AP_CLERK') {
-    return res.status(403).json({
-      success: false,
-      message: "Permission Denied: AP Clerk role is restricted from bulk approvals."
+    const user = await User.findOne({ email: email.toLowerCase().trim() });
+    if (!user) {
+      return res.status(400).json({ success: false, message: "Invalid email credentials." });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, message: "Invalid password." });
+    }
+
+    await AuditLog.create({
+      action: "USER_LOGIN",
+      details: `User logged in: ${user.email} (${user.role})`,
+      userEmail: user.email
     });
-  }
 
-  const threshold = minConfidence || 0.95;
-  const pendingInvoices = mongodbStore.invoices.filter(i => i.status === 'PENDING' && i.confidenceScore >= threshold);
-  
-  pendingInvoices.forEach(inv => {
+    res.json({
+      success: true,
+      message: "Login successful!",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (err) {
+    console.error("Login error:", err);
+    res.status(500).json({ success: false, message: "Server error during login." });
+  }
+});
+
+// INVOICE API ROUTES (REAL MONGODB)
+
+app.get('/api/invoices', async (req, res) => {
+  try {
+    const invoices = await Invoice.find().sort({ createdAt: -1 });
+    res.json({
+      success: true,
+      count: invoices.length,
+      invoices
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/stats', async (req, res) => {
+  try {
+    const invoices = await Invoice.find();
+    const stats = {
+      totalInvoices: invoices.length,
+      pending: invoices.filter(i => i.status === 'PENDING').length,
+      approved: invoices.filter(i => i.status === 'APPROVED').length,
+      rejected: invoices.filter(i => i.status === 'REJECTED').length,
+      totalValue: invoices.reduce((acc, i) => acc + (i.total || 0), 0),
+      avgConfidence: invoices.length > 0 ? (invoices.reduce((acc, i) => acc + (i.confidenceScore || 0), 0) / invoices.length) * 100 : 0
+    };
+    res.json({ success: true, stats, mongoConnected: isMongoConnected });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/process', async (req, res) => {
+  try {
+    const { inputType, fileName, fileData, role } = req.body;
+    const userRole = req.headers['x-user-role'] || role || 'AP_CLERK';
+    const userEmail = req.headers['x-user-email'] || 'user@invoice.com';
+
+    if (!inputType) {
+      return res.status(400).json({ success: false, message: "inputType is required" });
+    }
+    const results = await runProcessingEngine({ type: inputType, name: fileName, fileData, userRole, userEmail });
+    res.json({ success: true, message: `Processing Engine executed and stored in MongoDB`, processed: results });
+  } catch (err) {
+    console.error("Process error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/approve', async (req, res) => {
+  try {
+    const { id, notes, role } = req.body;
+    const userRole = req.headers['x-user-role'] || role || 'FINANCE_MANAGER';
+    const userEmail = req.headers['x-user-email'] || 'manager@invoice.com';
+
+    if (userRole === 'AP_CLERK') {
+      return res.status(403).json({
+        success: false,
+        message: "Permission Denied: AP Clerk role is restricted from approving invoices. Finance Manager role required."
+      });
+    }
+
+    const inv = await Invoice.findOne({ id: id });
+    if (!inv) return res.status(404).json({ success: false, message: "Invoice not found" });
+
     inv.status = "APPROVED";
-    inv.updatedAt = new Date().toISOString();
-    inv.processingLogs.push(`Bulk Approved by ${userRole} (Confidence: ${(inv.confidenceScore * 100).toFixed(0)}% >= ${(threshold * 100).toFixed(0)}%)`);
-  });
+    inv.updatedAt = new Date();
+    inv.processingLogs.push(`Approved by ${userRole} (${userEmail}) at ${new Date().toLocaleTimeString()} ${notes ? `(Note: ${notes})` : ''}`);
+    await inv.save();
 
-  mongodbStore.auditLogs.unshift({
-    timestamp: new Date().toISOString(),
-    action: "BULK_APPROVAL_EXECUTED",
-    details: `${pendingInvoices.length} invoices bulk approved by ${userRole} with threshold >= ${threshold}`
-  });
+    await AuditLog.create({
+      action: "INVOICE_APPROVED",
+      details: `Invoice ${id} approved by ${userEmail} [${userRole}]`,
+      userEmail
+    });
 
-  res.json({ success: true, approvedCount: pendingInvoices.length, invoices: pendingInvoices });
+    res.json({ success: true, invoice: inv });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
-app.post('/api/reject', (req, res) => {
-  const { id, reason, role } = req.body;
-  const userRole = req.headers['x-user-role'] || role || 'FINANCE_MANAGER';
+app.post('/api/approve-bulk', async (req, res) => {
+  try {
+    const { role, minConfidence } = req.body;
+    const userRole = req.headers['x-user-role'] || role || 'FINANCE_MANAGER';
+    const userEmail = req.headers['x-user-email'] || 'manager@invoice.com';
 
-  // Role validation: AP_CLERK cannot reject
-  if (userRole === 'AP_CLERK') {
-    return res.status(403).json({
-      success: false,
-      message: "Permission Denied: AP Clerk role is restricted from rejecting invoices. Finance Manager role required."
+    if (userRole === 'AP_CLERK') {
+      return res.status(403).json({
+        success: false,
+        message: "Permission Denied: AP Clerk role is restricted from bulk approvals."
+      });
+    }
+
+    const threshold = minConfidence || 0.95;
+    const pendingInvoices = await Invoice.find({ status: 'PENDING', confidenceScore: { $gte: threshold } });
+    
+    for (let inv of pendingInvoices) {
+      inv.status = "APPROVED";
+      inv.updatedAt = new Date();
+      inv.processingLogs.push(`Bulk Approved by ${userRole} (${userEmail}) (Confidence: ${(inv.confidenceScore * 100).toFixed(0)}% >= ${(threshold * 100).toFixed(0)}%)`);
+      await inv.save();
+    }
+
+    await AuditLog.create({
+      action: "BULK_APPROVAL_EXECUTED",
+      details: `${pendingInvoices.length} invoices bulk approved in MongoDB by ${userEmail} [${userRole}]`,
+      userEmail
     });
+
+    res.json({ success: true, approvedCount: pendingInvoices.length, invoices: pendingInvoices });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
-
-  const inv = mongodbStore.invoices.find(i => i.id === id);
-  if (!inv) return res.status(404).json({ success: false, message: "Invoice not found" });
-
-  inv.status = "REJECTED";
-  inv.updatedAt = new Date().toISOString();
-  inv.processingLogs.push(`Rejected by ${userRole}: ${reason || 'No reason provided'}`);
-
-  mongodbStore.auditLogs.unshift({
-    timestamp: new Date().toISOString(),
-    action: "INVOICE_REJECTED",
-    details: `Invoice ${id} rejected by role [${userRole}] (${reason || 'No reason'})`
-  });
-
-  res.json({ success: true, invoice: inv });
 });
 
-app.post('/api/reset', (req, res) => {
-  const userRole = req.headers['x-user-role'] || req.body.role;
+app.post('/api/reject', async (req, res) => {
+  try {
+    const { id, reason, role } = req.body;
+    const userRole = req.headers['x-user-role'] || role || 'FINANCE_MANAGER';
+    const userEmail = req.headers['x-user-email'] || 'manager@invoice.com';
 
-  // Enforce ADMIN role requirement when explicit role header or body is provided
-  if (userRole && userRole !== 'ADMIN') {
-    return res.status(403).json({
-      success: false,
-      message: "Permission Denied: Database purge & reset is strictly restricted to System Admin."
+    if (userRole === 'AP_CLERK') {
+      return res.status(403).json({
+        success: false,
+        message: "Permission Denied: AP Clerk role is restricted from rejecting invoices. Finance Manager role required."
+      });
+    }
+
+    const inv = await Invoice.findOne({ id: id });
+    if (!inv) return res.status(404).json({ success: false, message: "Invoice not found" });
+
+    inv.status = "REJECTED";
+    inv.updatedAt = new Date();
+    inv.processingLogs.push(`Rejected by ${userRole} (${userEmail}): ${reason || 'No reason provided'}`);
+    await inv.save();
+
+    await AuditLog.create({
+      action: "INVOICE_REJECTED",
+      details: `Invoice ${id} rejected by ${userEmail} [${userRole}] (${reason || 'No reason'})`,
+      userEmail
     });
-  }
 
-  mongodbStore.invoices = [];
-  mongodbStore.auditLogs.unshift({
-    timestamp: new Date().toISOString(),
-    action: "RESET",
-    details: `Cleared all records by ${userRole || 'ADMIN'}`
-  });
-  res.json({ success: true, message: "Database reset complete" });
+    res.json({ success: true, invoice: inv });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.post('/api/reset', async (req, res) => {
+  try {
+    const userRole = req.headers['x-user-role'] || req.body.role;
+    const userEmail = req.headers['x-user-email'] || 'admin@invoice.com';
+
+    if (userRole && userRole !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: "Permission Denied: Database purge & reset is strictly restricted to System Admin."
+      });
+    }
+
+    await Invoice.deleteMany({});
+    await AuditLog.create({
+      action: "RESET",
+      details: `Cleared all invoice records from MongoDB collection by ${userEmail} (${userRole || 'ADMIN'})`,
+      userEmail
+    });
+
+    res.json({ success: true, message: "MongoDB Database purge & reset complete" });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`Smart Invoice Server running at http://localhost:${PORT}`);
+  console.log(`Smart Invoice System running on http://localhost:${PORT}`);
 });
