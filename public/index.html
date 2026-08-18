@@ -1,47 +1,178 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Smart Invoice Automation System</title>
+  <title>Smart Invoice Automation System - 3 Dashboards</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <div class="app-container">
+
+<body class="light-theme">
+  <!-- DEDICATED LIGHT-THEME AUTHENTICATION PAGE (LOG IN / SIGN UP) -->
+  <div id="authContainer" class="auth-page-screen">
+    <!-- Light Ambient Animated Orbs & Grid -->
+    <div class="auth-bg-blob auth-blob-1"></div>
+    <div class="auth-bg-blob auth-blob-2"></div>
+    <div class="auth-bg-blob auth-blob-3"></div>
+    <div class="auth-bg-pattern"></div>
+
+    <div class="auth-page-wrapper">
+      <!-- Brand Header -->
+      <div class="auth-brand-header">
+        <div class="auth-brand-icon">⚡</div>
+        <div class="auth-brand-info">
+          <h1>InvoiceEngine</h1>
+          <p>Smart RPA Pipeline & MongoDB Role-Based System</p>
+        </div>
+      </div>
+
+      <!-- Auth Card Container -->
+      <div class="auth-card">
+        <div class="auth-card-header">
+          <h2 id="authCardHeading">Welcome Back</h2>
+          <p id="authCardSubheading">Select your role or enter credentials to access your dedicated dashboard</p>
+        </div>
+
+        <!-- Auth Tabs: Log In / Sign Up -->
+        <div class="auth-tabs">
+          <button class="auth-tab active" id="tabBtnSignIn" onclick="switchAuthTab('login')">🔑 Log In</button>
+          <button class="auth-tab" id="tabBtnSignUp" onclick="switchAuthTab('signup')">📝 Register (Sign Up)</button>
+        </div>
+
+        <!-- Alert Banner -->
+        <div id="authAlert" class="auth-alert" style="display:none;"></div>
+
+        <!-- LOG IN FORM -->
+        <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="auth-form">
+          <div class="form-group">
+            <label for="loginEmail">Email Address</label>
+            <input type="email" id="loginEmail" class="form-input"
+              placeholder="e.g. user@invoice.com or manager@invoice.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="loginPassword">Password</label>
+            <div class="password-input-wrapper">
+              <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
+              <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('loginPassword', this)" aria-label="Toggle password visibility" title="Show/Hide Password">
+                <span class="eye-icon eye-closed" title="Password Hidden">🙈</span>
+                <span class="eye-icon eye-open" style="display: none;" title="Password Visible">👁️</span>
+              </button>
+            </div>
+          </div>
+
+          <button type="submit" class="btn primary auth-submit-btn">
+            🔐 Log In to Role Dashboard
+          </button>
+        </form>
+
+        <!-- SIGN UP FORM -->
+        <form id="signupForm" onsubmit="handleSignupSubmit(event)" class="auth-form" style="display:none;">
+          <div class="form-group">
+            <label for="signupName">Full Name</label>
+            <input type="text" id="signupName" class="form-input" placeholder="e.g. Sarah Jenkins" required>
+          </div>
+
+          <div class="form-group">
+            <label for="signupEmail">Email Address</label>
+            <input type="email" id="signupEmail" class="form-input" placeholder="e.g. sarah@company.com" required>
+          </div>
+
+          <div class="form-group">
+            <label for="signupPassword">Password</label>
+            <div class="password-input-wrapper">
+              <input type="password" id="signupPassword" class="form-input" placeholder="••••••••" required minlength="6">
+              <button type="button" class="toggle-password-btn" onclick="togglePasswordVisibility('signupPassword', this)" aria-label="Toggle password visibility" title="Show/Hide Password">
+                <span class="eye-icon eye-closed" title="Password Hidden">🙈</span>
+                <span class="eye-icon eye-open" style="display: none;" title="Password Visible">👁️</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="signupRole">Account Dashboard Role</label>
+            <select id="signupRole" class="form-input">
+              <option value="AP_CLERK">👤 USER (Upload Invoices & View Personal History)</option>
+
+              <option value="ADMIN">⚙️ ADMIN (System Flow & All Users Data Box Inspector)</option>
+            </select>
+          </div>
+
+          <button type="submit" class="btn accent auth-submit-btn">
+            ✨ Register & Enter Dashboard
+          </button>
+        </form>
+
+        <!-- PRE-CONFIGURED QUICK LOG IN DEMO CREDENTIALS -->
+        <div class="quick-credentials-panel">
+          <div class="panel-head">
+            <span>⚡ Quick Demo Login (Select Dashboard):</span>
+            <span class="click-hint">1-Click Auto Fill</span>
+          </div>
+          <div class="quick-cred-buttons">
+            <button type="button" class="cred-chip chip-user"
+              onclick="fillQuickCredentials('user@invoice.com', 'user123')">
+              <div class="chip-main">
+                <span class="chip-title">👤 1. USER Dashboard</span>
+                <span class="chip-email">user@invoice.com</span>
+              </div>
+              <div class="chip-sub">
+                <span class="chip-pass">🔑 pass: <strong>user123</strong></span>
+                <span class="chip-desc">Upload & Personal History</span>
+              </div>
+            </button>
+
+            <button type="button" class="cred-chip chip-mgr"
+              onclick="fillQuickCredentials('manager@invoice.com', 'admin123')">
+              <div class="chip-main">
+                <span class="chip-title">👑 2. MANAGEMENT Dashboard</span>
+                <span class="chip-email">manager@invoice.com</span>
+              </div>
+              <div class="chip-sub">
+                <span class="chip-pass">🔑 pass: <strong>admin123</strong></span>
+                <span class="chip-desc">Approve / Reject & Analytics</span>
+              </div>
+            </button>
+
+            <button type="button" class="cred-chip chip-admin"
+              onclick="fillQuickCredentials('admin@invoice.com', 'admin123')">
+              <div class="chip-main">
+                <span class="chip-title">⚙️ 3. ADMIN Dashboard</span>
+                <span class="chip-email">admin@invoice.com</span>
+              </div>
+              <div class="chip-sub">
+                <span class="chip-pass">🔑 pass: <strong>admin123</strong></span>
+                <span class="chip-desc">System Flow & Data Inspector</span>
+              </div>
+            </button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN APP CONTAINER -->
+  <div class="app-container" id="appContainer" style="display: none;">
     <!-- Sidebar Navigation -->
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-icon">⚡</div>
         <div class="brand-text">
           <h1>InvoiceEngine</h1>
-          <span>Smart RPA Pipeline</span>
+          <span id="roleSubtext">Smart RPA System</span>
         </div>
       </div>
 
-      <nav class="nav-menu">
-        <button class="nav-item active" data-tab="workflow">
-          <span class="icon">🔄</span> End-to-End Workflow
-        </button>
-        <button class="nav-item" data-tab="input">
-          <span class="icon">📥</span> Invoice Input
-          <span class="role-tag tag-ap">AP</span>
-        </button>
-        <button class="nav-item" data-tab="engine">
-          <span class="icon">⚙️</span> Processing Engine
-          <span class="role-tag tag-admin">ADMIN</span>
-        </button>
-        <button class="nav-item" data-tab="mongodb">
-          <span class="icon">🍃</span> MongoDB Layer
-          <span class="role-tag tag-admin">ADMIN</span>
-        </button>
-        <button class="nav-item" data-tab="approval">
-          <span class="icon">✅</span> Approval Workflow
-          <span class="role-tag tag-mgr">MGR</span>
-          <span class="badge" id="pendingBadge">0</span>
-        </button>
+      <!-- Dynamic Navigation Menu based on Logged-in Dashboard -->
+      <nav class="nav-menu" id="navMenu">
+        <!-- Injected via JavaScript based on role -->
       </nav>
 
       <div class="db-status-card">
@@ -55,34 +186,26 @@
 
     <!-- Main Content Area -->
     <main class="main-content">
-      <!-- Top Metrics Header -->
+      <!-- Top Metrics & Profile Header -->
       <header class="top-header">
         <div class="header-title">
-          <h2 id="pageTitle">Workflow Overview</h2>
-          <p id="pageSubtitle">Real-time tracking from Invoice Input to MongoDB & Approval</p>
+          <h2 id="pageTitle">Dashboard</h2>
+          <p id="pageSubtitle">Smart Role-Based Invoice System</p>
         </div>
 
         <div class="header-actions">
-          <!-- Account Profile & Auth Modal Trigger -->
           <div class="user-profile-widget" id="userProfileWidget">
-            <div class="user-info-chip" onclick="openAuthModal()">
+            <div class="user-info-chip">
               <span class="user-avatar" id="userAvatar">👤</span>
               <div class="user-details">
                 <span class="user-name" id="userNameLabel">Guest User</span>
-                <span class="user-role-badge" id="userRoleBadge">AP Clerk</span>
+                <span class="user-role-badge" id="userRoleBadge">User Role</span>
               </div>
             </div>
-            <button class="btn sm ghost auth-action-btn" id="btnAuthAction" onclick="handleAuthButtonClick()">
-              🔑 Sign In / Sign Up
+            <button class="btn sm ghost auth-action-btn" id="btnAuthAction" onclick="handleLogout()">
+              🚪 Log Out
             </button>
           </div>
-
-          <!-- Hidden legacy role switcher synced with logged in user -->
-          <select id="roleSelector" onchange="switchRole(this.value)" class="role-select" style="display:none;">
-            <option value="AP_CLERK">👤 Accounts Payable (AP Clerk)</option>
-            <option value="ADMIN">⚙️ System / RPA Admin</option>
-            <option value="FINANCE_MANAGER">👑 Finance Manager (Approver)</option>
-          </select>
 
           <div class="stats-pills">
             <div class="pill">
@@ -90,304 +213,542 @@
               <span class="val" id="statTotalVal">$0.00</span>
             </div>
             <div class="pill">
-              <span class="lbl">Accuracy Rate</span>
+              <span class="lbl">Accuracy</span>
               <span class="val" id="statAccuracy">0%</span>
             </div>
             <div class="pill highlight">
-              <span class="lbl">Pending Action</span>
+              <span class="lbl">Pending</span>
               <span class="val" id="statPendingCount">0</span>
             </div>
           </div>
         </div>
       </header>
 
-      <!-- Role Guidance Banner -->
-      <div id="roleBanner" class="role-banner banner-manager">
-        <div class="banner-icon" id="roleBannerIcon">👑</div>
+      <!-- Dynamic Role Banner -->
+      <div id="roleBanner" class="role-banner banner-user">
+        <div class="banner-icon" id="roleBannerIcon">👤</div>
         <div class="banner-text">
-          <strong id="roleBannerTitle">Finance Manager Role Active</strong>
-          <span id="roleBannerDesc">You have full authority to review pending invoices and perform Approve / Reject sign-off actions.</span>
+          <strong id="roleBannerTitle">User Dashboard Active</strong>
+          <span id="roleBannerDesc">Submit invoice files and track your personal submission history.</span>
         </div>
       </div>
 
-      <!-- TAB 1: END-TO-END WORKFLOW (DEFAULT) -->
-      <section class="tab-page active" id="tab-workflow">
-        <div class="architecture-flow">
-          <div class="flow-card" onclick="switchTab('input')">
-            <div class="step-badge">STAGE 1 (AP CLERK)</div>
-            <div class="flow-icon">📥</div>
-            <h3>Invoice Input</h3>
-            <p>Single PDF/IMG, Batch Upload, CSV/XLSX Datasets</p>
-            <div class="input-types-tags">
-              <span>SINGLE PDF/IMG</span>
-              <span>MULTIPLE PDF/IMG</span>
-              <span>DATASET CSV/XLSX</span>
+      <!-- ================================================================= -->
+      <!-- 1: USER DASHBOARD -->
+      <!-- ================================================================= -->
+      <section class="dashboard-view" id="userDashboardView" style="display: none;">
+
+
+        <!-- Sub-section 1: Instruction Card for User -->
+        <div id="userSubSectionInstructions" class="user-sub-section">
+          <div class="instruction-card">
+            <div class="instruction-header">
+              <div class="inst-icon">💡</div>
+              <div>
+                <h3>Basic Instructions for Invoice Submission</h3>
+                <p>Follow these 3 simple steps to upload invoices and track your processing status.</p>
+              </div>
+            </div>
+
+            <div class="steps-grid">
+              <div class="step-box">
+                <div class="step-num">1</div>
+                <h4>Upload Invoices</h4>
+                <p>Drag and drop single PDF/Image files, batch documents, or bulk CSV spreadsheets below.</p>
+              </div>
+              <div class="step-box">
+                <div class="step-num">2</div>
+                <h4>Automated RPA Extraction</h4>
+                <p>The system automatically parses vendor, line items, amounts, and calculates confidence scores.</p>
+              </div>
+              <div class="step-box">
+                <div class="step-num">3</div>
+                <h4>Track Your History</h4>
+                <p>Review your personal submission history below to monitor pending approval status in real-time.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sub-section 2: Ingestion Forms (Upload Cards with File Fields) -->
+        <div id="userSubSectionUpload" class="user-sub-section">
+          <h3 class="section-title" style="margin-top: 10px;">📥 Upload Invoices (PDF & Excel Support)</h3>
+          <div class="input-selection-grid">
+            <!-- 1. PDF File Upload Card -->
+            <div class="input-card">
+              <div class="card-head">
+                <span class="icon">📄</span>
+                <div>
+                  <h3>Upload PDF Invoice File</h3>
+                  <p>Upload PDF or image document with optional metadata</p>
+                </div>
+              </div>
+
+              <input type="file" id="singleFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp" style="display:none"
+                onchange="handleFileSelect(event, 'SINGLE_PDF')">
+              <div class="drop-zone" id="dropZoneSingle" onclick="triggerFileInput('singleFileInput')">
+                <div class="dz-icon">☁️</div>
+                <p>Drag & Drop Single Invoice PDF or Image</p>
+                <span>Supported Formats: .pdf, .png, .jpg</span>
+                <button class="btn sm primary" type="button" id="btnSingleBrowse">Select PDF File</button>
+              </div>
+
+              <!-- PDF Custom Fields -->
+              <div class="upload-custom-fields" style="margin-top: 14px;">
+                <div class="form-group sm">
+                  <label for="pdfVendorInput">Vendor Name (Optional Override)</label>
+                  <input type="text" id="pdfVendorInput" class="form-input sm" placeholder="e.g. Acme Corp Supplies">
+                </div>
+                <div class="form-group-row">
+                  <div class="form-group sm flex-1">
+                    <label for="pdfDateInput">Invoice Date</label>
+                    <input type="date" id="pdfDateInput" class="form-input sm">
+                  </div>
+                  <div class="form-group sm flex-2">
+                    <label for="pdfNotesInput">Notes / PO Reference</label>
+                    <input type="text" id="pdfNotesInput" class="form-input sm" placeholder="e.g. PO-89211 Urgent">
+                  </div>
+                </div>
+              </div>
+
+              <div id="singleFilePreview" class="file-preview-area" style="display:none;"></div>
+            </div>
+
+            <!-- 2. Excel / CSV File Upload Card -->
+            <div class="input-card">
+              <div class="card-head">
+                <span class="icon">📊</span>
+                <div>
+                  <h3>Upload Excel / CSV Spreadsheet</h3>
+                  <p>Bulk process structured invoice datasets & sheets</p>
+                </div>
+              </div>
+
+              <input type="file" id="datasetFileInput" accept=".csv,.xlsx,.xls" style="display:none"
+                onchange="handleFileSelect(event, 'DATASET_CSV')">
+              <div class="drop-zone" id="dropZoneDataset" onclick="triggerFileInput('datasetFileInput')">
+                <div class="dz-icon">📈</div>
+                <p>Drag & Drop CSV / Excel File</p>
+                <span>Supported Formats: .xlsx, .xls, .csv</span>
+                <button class="btn sm accent" type="button" id="btnDatasetBrowse">Select Excel File</button>
+              </div>
+
+              <!-- Excel Custom Fields -->
+              <div class="upload-custom-fields" style="margin-top: 14px;">
+                <div class="form-group sm">
+                  <label for="excelVendorInput">Default Vendor / Dept (Optional)</label>
+                  <input type="text" id="excelVendorInput" class="form-input sm"
+                    placeholder="e.g. Global Tech Services">
+                </div>
+                <div class="form-group sm">
+                  <label for="excelNotesInput">Batch Remarks / Tag</label>
+                  <input type="text" id="excelNotesInput" class="form-input sm" placeholder="e.g. Q3 Vendor Batch #4">
+                </div>
+              </div>
+
+              <div id="datasetFilePreview" class="file-preview-area" style="display:none;"></div>
+            </div>
+
+            <!-- 3. Multiple Batch Upload Card -->
+            <div class="input-card">
+              <div class="card-head">
+                <span class="icon">📚</span>
+                <div>
+                  <h3>Batch PDF & Excel Upload</h3>
+                  <p>Upload mixed batch of PDF and Excel files simultaneously</p>
+                </div>
+              </div>
+
+              <input type="file" id="multiFileInput" accept=".pdf,.csv,.xlsx,.xls,.png,.jpg" multiple
+                style="display:none" onchange="handleFileSelect(event, 'MULTIPLE_PDF')">
+              <div class="drop-zone" id="dropZoneMulti" onclick="triggerFileInput('multiFileInput')">
+                <div class="dz-icon">📁</div>
+                <p>Drag & Drop Multiple Files (PDF + Excel)</p>
+                <span>Batch engine will auto-process all documents</span>
+                <button class="btn sm secondary" type="button" id="btnMultiBrowse">Browse Mixed Batch</button>
+              </div>
+
+              <div class="upload-custom-fields" style="margin-top: 14px;">
+                <div class="form-group sm">
+                  <label for="batchNotesInput">Batch Reference Tag</label>
+                  <input type="text" id="batchNotesInput" class="form-input sm"
+                    placeholder="e.g. August Logistics Batch">
+                </div>
+              </div>
+
+              <div id="multiFilePreview" class="file-preview-area" style="display:none;"></div>
             </div>
           </div>
 
-          <div class="flow-arrow">➔</div>
-
-          <div class="flow-card" onclick="switchTab('engine')">
-            <div class="step-badge">STAGE 2 (ADMIN & ENGINE)</div>
-            <div class="flow-icon">⚙️</div>
-            <h3>Processing Engine</h3>
-            <p>OCR Extraction, Rule Validation & Confidence Scoring</p>
-            <div class="engine-bar-animated"></div>
-          </div>
-
-          <div class="flow-arrow">➔</div>
-
-          <div class="flow-card" onclick="switchTab('mongodb')">
-            <div class="step-badge">STAGE 3 (ADMIN & MONGO)</div>
-            <div class="flow-icon">🍃</div>
-            <h3>MongoDB Storage</h3>
-            <p>Document Database Storage & Audit Trails</p>
-            <span class="sub-code">collection: invoices</span>
-          </div>
-
-          <div class="flow-arrow">➔</div>
-
-          <div class="flow-card" onclick="switchTab('approval')">
-            <div class="step-badge">STAGE 4 (FINANCE MGR)</div>
-            <div class="flow-icon">✅</div>
-            <h3>Approval Workflow</h3>
-            <p>Role-based Decision & Manager Sign-off</p>
-            <div class="action-mini">Approve / Reject</div>
+          <!-- Quick Sample Inputs -->
+          <div class="quick-actions-bar" style="margin-top:24px;">
+            <h3>⚡ Quick Test Input Simulations</h3>
+            <div class="btn-group">
+              <button class="btn primary" onclick="triggerProcess('SINGLE_PDF', 'Sample_Invoice_A1.pdf')">
+                📄 Test Single PDF Input
+              </button>
+              <button class="btn accent" onclick="triggerProcess('DATASET_CSV', 'Vendor_Dataset_Q3.xlsx')">
+                📊 Test Excel Dataset Input
+              </button>
+              <button class="btn secondary" onclick="triggerProcess('MULTIPLE_PDF', 'Batch_Invoices_Q3.pdf')">
+                📦 Test Batch Input
+              </button>
+            </div>
           </div>
         </div>
 
-        <div class="quick-actions-bar">
-          <h3>Quick Test Inputs</h3>
-          <div class="btn-group">
-            <button class="btn primary" onclick="triggerProcess('SINGLE_PDF', 'Sample_Invoice_A1.pdf')">
-              ⚡ Test Single PDF Input
-            </button>
-            <button class="btn secondary" onclick="triggerProcess('MULTIPLE_PDF', 'Batch_Invoices_Q3.pdf')">
-              📦 Test Multiple PDF Batch
-            </button>
-            <button class="btn accent" onclick="triggerProcess('DATASET_CSV', 'Vendor_Dataset_Import.csv')">
-              📊 Test Dataset CSV Input
-            </button>
-          </div>
-        </div>
+        <!-- Sub-section 3: My Personal History Section -->
+        <div id="userSubSectionHistory" class="user-sub-section">
+          <div class="panel" style="margin-top: 24px;">
+            <div class="panel-header-flex"
+              style="flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;">
+              <div>
+                <h3>📜 My Submitted Invoices History</h3>
+                <p style="font-size:13px; color:#60a5fa; font-weight:600;" id="userHistoryOwnerTag">Showing invoices
+                  for: Current User</p>
+              </div>
 
-        <div class="live-activity-grid">
-          <div class="panel">
-            <h3>Recent MongoDB Records</h3>
-            <div class="table-container">
-              <table id="quickTable">
+              <!-- History Search & Filter Toolbar -->
+              <div class="history-filter-bar" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <div class="search-box-wrap" style="position: relative;">
+                  <input type="text" id="userHistorySearchInput" class="form-input sm"
+                    placeholder="🔍 Search vendor, file, ID..." oninput="filterUserHistory()"
+                    style="width: 220px; padding-left: 28px;">
+                  <span style="position: absolute; left: 8px; top: 8px; opacity: 0.7; font-size: 13px;"></span>
+                </div>
+
+                <select id="userHistoryTypeFilter" class="form-input sm" onchange="filterUserHistory()"
+                  style="width: 140px;">
+                  <option value="ALL">All File Types</option>
+                  <option value="PDF">📄 PDF Files</option>
+                  <option value="EXCEL">📊 Excel / CSV</option>
+                </select>
+
+                <select id="userHistoryStatusFilter" class="form-input sm" onchange="filterUserHistory()"
+                  style="width: 130px;">
+                  <option value="ALL">All Statuses</option>
+                  <option value="PENDING">⏳ PENDING</option>
+                  <option value="APPROVED">✅ APPROVED</option>
+                  <option value="REJECTED">🚫 REJECTED</option>
+                </select>
+
+                <span class="user-tag-pill" id="userHistoryCountLabel">0 records</span>
+              </div>
+            </div>
+
+            <div class="table-container" style="margin-top: 16px;">
+              <table class="db-table">
                 <thead>
                   <tr>
-                    <th>Invoice ID</th>
+                    <th>Invoice ID & File</th>
+                    <th>File Name</th>
                     <th>Vendor</th>
-                    <th>Input Type</th>
-                    <th>Amount</th>
+                    <th>Total ($)</th>
                     <th>Confidence</th>
                     <th>Status</th>
+                    <th>Date & Remarks</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody id="quickTableBody">
+                <tbody id="userHistoryTableBody">
                   <!-- Populated via JS -->
                 </tbody>
               </table>
             </div>
           </div>
         </div>
+
       </section>
 
-      <!-- TAB 2: INVOICE INPUT -->
-      <section class="tab-page" id="tab-input">
-        <div id="inputRoleNotice" class="role-notice-bar" style="display:none;">
-          <span>ℹ️ <strong>Ingestion Notice:</strong> Data capture and upload operations are managed by AP Clerks. Switch role to AP Clerk to upload new invoices.</span>
+      <!-- ================================================================= -->
+      <!-- 2: MANAGEMENT DASHBOARD -->
+      <!-- ================================================================= -->
+      <section class="dashboard-view" id="mgrDashboardView" style="display: none;">
+
+        <!-- Sub-section 1: Management Summary Cards -->
+        <div id="mgrSubSectionSummary" class="mgr-sub-section">
+          <div class="stats-overview-grid">
+            <div class="stat-card">
+              <div class="stat-icon pending-icon">⏳</div>
+              <div class="stat-details">
+                <span class="title">Pending Approvals</span>
+                <h3 id="mgrPendingCount">0 Invoices</h3>
+                <span class="sub">Requires Sign-off</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon approve-icon">✅</div>
+              <div class="stat-details">
+                <span class="title">Approved Total</span>
+                <h3 id="mgrApprovedVal">$0.00</h3>
+                <span class="sub" id="mgrApprovedCount">0 approved</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon reject-icon">🚫</div>
+              <div class="stat-details">
+                <span class="title">Rejected Total</span>
+                <h3 id="mgrRejectedVal">$0.00</h3>
+                <span class="sub" id="mgrRejectedCount">0 rejected</span>
+              </div>
+            </div>
+
+            <div class="stat-card">
+              <div class="stat-icon confidence-icon">🎯</div>
+              <div class="stat-details">
+                <span class="title">Avg Confidence</span>
+                <h3 id="mgrAvgConfidence">0%</h3>
+                <span class="sub">OCR Accuracy</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div class="input-selection-grid">
-          <!-- Single PDF/IMG -->
-          <div class="input-card">
-            <div class="card-head">
-              <span class="icon">📄</span>
-              <div>
-                <h3>Single PDF / Image</h3>
-                <p>Upload a single invoice document for instant extraction</p>
+        <!-- Sub-section 2: Approval Workflow Desk -->
+        <div id="mgrSubSectionDesk" class="mgr-sub-section">
+          <div class="approval-desk" style="margin-top: 28px;">
+            <div class="desk-filters-bar">
+              <div class="desk-filters">
+                <button class="tab-btn active" onclick="filterApproval('PENDING', this)">Pending Approvals</button>
+                <button class="tab-btn" onclick="filterApproval('APPROVED', this)">Approved History</button>
+                <button class="tab-btn" onclick="filterApproval('REJECTED', this)">Rejected Invoices</button>
               </div>
-            </div>
-            <input type="file" id="singleFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp" style="display:none" onchange="handleFileSelect(event, 'SINGLE_PDF')">
-            <div class="drop-zone" id="dropZoneSingle" onclick="triggerFileInput('singleFileInput')">
-              <div class="dz-icon">☁️</div>
-              <p>Drag & Drop Single Invoice PDF or Image</p>
-              <span>Supported: .pdf, .png, .jpg, .jpeg</span>
-              <button class="btn sm primary" type="button" id="btnSingleBrowse">Browse File</button>
-            </div>
-            <div id="singleFilePreview" class="file-preview-area" style="display:none;"></div>
-          </div>
 
-          <!-- Multiple PDF/IMG -->
-          <div class="input-card">
-            <div class="card-head">
-              <span class="icon">📚</span>
-              <div>
-                <h3>Multiple PDF / Images</h3>
-                <p>Batch process multiple invoice files simultaneously</p>
-              </div>
-            </div>
-            <input type="file" id="multiFileInput" accept=".pdf,.png,.jpg,.jpeg,.webp" multiple style="display:none" onchange="handleFileSelect(event, 'MULTIPLE_PDF')">
-            <div class="drop-zone" id="dropZoneMulti" onclick="triggerFileInput('multiFileInput')">
-              <div class="dz-icon">📁</div>
-              <p>Drag & Drop Multiple Invoice Files</p>
-              <span>Batch engine will auto-extract all files</span>
-              <button class="btn sm secondary" type="button" id="btnMultiBrowse">Browse Batch Files</button>
-            </div>
-            <div id="multiFilePreview" class="file-preview-area" style="display:none;"></div>
-          </div>
-
-          <!-- Dataset CSV/XLSX -->
-          <div class="input-card">
-            <div class="card-head">
-              <span class="icon">📊</span>
-              <div>
-                <h3>Dataset CSV / XLSX</h3>
-                <p>Bulk import structured invoice records from spreadsheets</p>
-              </div>
-            </div>
-            <input type="file" id="datasetFileInput" accept=".csv,.xlsx,.xls" style="display:none" onchange="handleFileSelect(event, 'DATASET_CSV')">
-            <div class="drop-zone" id="dropZoneDataset" onclick="triggerFileInput('datasetFileInput')">
-              <div class="dz-icon">📈</div>
-              <p>Drag & Drop CSV / Excel Spreadsheet</p>
-              <span>Supported: .csv, .xlsx, .xls</span>
-              <button class="btn sm accent" type="button" id="btnDatasetBrowse">Browse Dataset</button>
-            </div>
-            <div id="datasetFilePreview" class="file-preview-area" style="display:none;"></div>
-          </div>
-        </div>
-      </section>
-
-      <!-- TAB 3: PROCESSING ENGINE -->
-      <section class="tab-page" id="tab-engine">
-        <div class="engine-dashboard">
-          <!-- Admin Engine Tuning Controls -->
-          <div id="adminEngineControls" class="admin-controls-card" style="display:none;">
-            <div class="admin-head">
-              <span>⚙️ <strong>RPA Engine Administration & Tuning</strong> (Admin Exclusive)</span>
-            </div>
-            <div class="admin-actions-flex">
-              <div class="control-group">
-                <label for="ocrConfidenceRange">Min Confidence Threshold: <strong id="ocrScoreLabel">90%</strong></label>
-                <input type="range" id="ocrConfidenceRange" min="70" max="99" value="90" oninput="document.getElementById('ocrScoreLabel').textContent = this.value + '%'">
-              </div>
-              <button class="btn sm secondary" onclick="simulateEngineDiagnostic()">⚡ Run Engine Diagnostics</button>
-              <button class="btn sm ghost" onclick="clearLogsConsole()">🧹 Clear Console Logs</button>
-            </div>
-          </div>
-
-          <div class="engine-pipeline-visual">
-            <div class="pipeline-step active" id="step1">
-              <span class="num">1</span>
-              <h4>Input Parsing</h4>
-              <p>Format Detection & Extraction</p>
-            </div>
-            <div class="pipeline-step active" id="step2">
-              <span class="num">2</span>
-              <h4>Pattern Extraction</h4>
-              <p>Regex & OCR Field Match</p>
-            </div>
-            <div class="pipeline-step active" id="step3">
-              <span class="num">3</span>
-              <h4>Validation Rules</h4>
-              <p>Subtotal + Tax = Total</p>
-            </div>
-            <div class="pipeline-step active" id="step4">
-              <span class="num">4</span>
-              <h4>MongoDB Sync</h4>
-              <p>Doc Insertion & Indexing</p>
-            </div>
-          </div>
-
-          <div class="engine-log-console">
-            <div class="console-head">
-              <span>⚡ Processing Engine Logs (Real-time)</span>
-              <button class="btn xs ghost" onclick="clearLogsConsole()">Clear Console</button>
-            </div>
-            <pre class="console-body" id="consoleLogs">
-[ENGINE_INIT] Pipeline standby. Awaiting invoice inputs...
-[MONGO_DRIVER] Connected to MongoDB Database 'smart_invoice_db'.
-            </pre>
-          </div>
-        </div>
-      </section>
-
-      <!-- TAB 4: MONGODB LAYER -->
-      <section class="tab-page" id="tab-mongodb">
-        <div class="mongodb-viewer">
-          <div class="mongodb-header">
-            <div>
-              <h3>MongoDB Collection: <code>invoices</code></h3>
-              <p>Database: <code>smart_invoice_db</code> | Primary Key: <code>_id</code></p>
-            </div>
-            <div class="filter-controls" style="display:flex; gap:12px; align-items:center;">
-              <select id="dbStatusFilter" onchange="renderMongoDBTable()">
-                <option value="ALL">All Statuses</option>
-                <option value="PENDING">PENDING</option>
-                <option value="APPROVED">APPROVED</option>
-                <option value="REJECTED">REJECTED</option>
-              </select>
-
-              <!-- Admin Database Reset Button -->
-              <button id="adminResetBtn" class="btn sm danger" onclick="confirmResetDatabase()" style="display:none;">
-                🗑️ Purge Database (Admin)
+              <button id="btnBulkApprove" class="btn sm accent" onclick="executeBulkApproval()">
+                ⚡ Bulk Approve High Confidence (≥95%)
               </button>
             </div>
-          </div>
 
-          <div id="mongoRoleNotice" class="role-notice-bar admin-notice" style="display:none;">
-            <span>🛡️ <strong>System Admin Mode:</strong> Full MongoDB document access enabled. Direct document JSON inspect and Database Purge tools unlocked.</span>
-          </div>
-
-          <div class="table-container">
-            <table class="db-table">
-              <thead>
-                <tr>
-                  <th>_id / Invoice #</th>
-                  <th>Input Source</th>
-                  <th>Vendor Details</th>
-                  <th>Total ($)</th>
-                  <th>Confidence</th>
-                  <th>Status</th>
-                  <th>Logs</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="mongoTableBody">
-                <!-- Dynamic MongoDB Docs -->
-              </tbody>
-            </table>
+            <div class="approval-cards-grid" id="approvalCardsGrid">
+              <!-- Dynamic Approval Cards -->
+            </div>
           </div>
         </div>
+
+        <!-- Sub-section 3: Management Analysis Panel -->
+        <div id="mgrSubSectionAnalysis" class="mgr-sub-section">
+          <div class="analysis-section" style="margin-top: 36px;">
+            <h3 class="section-title">📊 Management Analysis & Metrics</h3>
+
+            <div class="analysis-grid">
+              <!-- Status Distribution Card -->
+              <div class="panel">
+                <h3>Invoice Status Distribution</h3>
+                <div class="status-bar-wrapper">
+                  <div class="bar-flex">
+                    <span class="lbl">Approved</span>
+                    <div class="progress-track">
+                      <div class="progress-fill fill-approved" id="barApproved" style="width: 0%;"></div>
+                    </div>
+                    <span class="val" id="valApprovedPerc">0%</span>
+                  </div>
+
+                  <div class="bar-flex">
+                    <span class="lbl">Pending</span>
+                    <div class="progress-track">
+                      <div class="progress-fill fill-pending" id="barPending" style="width: 0%;"></div>
+                    </div>
+                    <span class="val" id="valPendingPerc">0%</span>
+                  </div>
+
+                  <div class="bar-flex">
+                    <span class="lbl">Rejected</span>
+                    <div class="progress-track">
+                      <div class="progress-fill fill-rejected" id="barRejected" style="width: 0%;"></div>
+                    </div>
+                    <span class="val" id="valRejectedPerc">0%</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Top Vendors Breakdown -->
+              <div class="panel">
+                <h3>Top Vendors Breakdown</h3>
+                <div class="table-container">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Vendor Name</th>
+                        <th>Invoices</th>
+                        <th>Total Value ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody id="vendorBreakdownBody">
+                      <!-- Dynamic vendors -->
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </section>
 
-      <!-- TAB 5: APPROVAL WORKFLOW -->
-      <section class="tab-page" id="tab-approval">
-        <div class="approval-desk">
-          <div id="approvalRoleNotice" class="role-notice-bar mgr-notice" style="display:none;">
-            <span>🔒 <strong>Role Restriction:</strong> Approval actions are restricted to Finance Managers. Active role is view-only.</span>
-          </div>
+      <!-- ================================================================= -->
+      <!-- 3: ADMIN DASHBOARD -->
+      <!-- ================================================================= -->
+      <section class="dashboard-view" id="adminDashboardView" style="display: none;">
 
-          <div class="desk-filters-bar" style="display:flex; justify-space-between; align-items:center; margin-bottom:24px;">
-            <div class="desk-filters">
-              <button class="tab-btn active" onclick="filterApproval('PENDING', this)">Pending Approvals</button>
-              <button class="tab-btn" onclick="filterApproval('APPROVED', this)">Approved History</button>
-              <button class="tab-btn" onclick="filterApproval('REJECTED', this)">Rejected Invoices</button>
+        <!-- Admin Sub-section 1: All Users History Box Inspector -->
+        <div id="adminSubSectionUsers" class="admin-sub-section">
+          <div class="panel user-inspector-card">
+            <div class="panel-header-flex">
+              <div>
+                <h3>👥 All System Users (Click User Box to Inspect History & Data)</h3>
+                <p>Select any user card below to view that user's specific submission history, status, and raw records.
+                </p>
+              </div>
+              <button class="btn sm secondary" onclick="loadAdminUsers()">🔄 Refresh Users List</button>
             </div>
 
-            <!-- Finance Manager Bulk Approve Button -->
-            <button id="btnBulkApprove" class="btn sm accent" onclick="executeBulkApproval()" style="display:none;">
-              ⚡ Bulk Approve High Confidence (≥95%)
-            </button>
-          </div>
+            <!-- User Cards Grid -->
+            <div class="user-boxes-grid" id="userBoxesGrid">
+              <!-- Dynamic User Cards (System Admin, Finance Manager, AP Clerk, etc.) -->
+            </div>
 
-          <div class="approval-cards-grid" id="approvalCardsGrid">
-            <!-- Dynamic Cards -->
+            <!-- Selected User History & Data Display Panel -->
+            <div class="selected-user-detail-panel" id="selectedUserDetailPanel" style="display:none;">
+              <div class="selected-user-header">
+                <div class="user-info-large">
+                  <span class="avatar-large" id="inspectUserAvatar">👤</span>
+                  <div>
+                    <h4 id="inspectUserName">User Name</h4>
+                    <span id="inspectUserEmail">user@invoice.com</span> | <span class="badge-role"
+                      id="inspectUserRole">AP_CLERK</span>
+                  </div>
+                </div>
+                <div class="stats-mini-flex">
+                  <span class="pill-mini">Submitted: <strong id="inspectTotalSubmitted">0</strong></span>
+                  <span class="pill-mini green">Approved: <strong id="inspectApprovedCount">0</strong></span>
+                  <span class="pill-mini orange">Pending: <strong id="inspectPendingCount">0</strong></span>
+                </div>
+              </div>
+
+              <h4 class="sub-head" style="margin-top:16px;">Submitted Invoices for Selected User</h4>
+              <div class="table-container">
+                <table class="db-table">
+                  <thead>
+                    <tr>
+                      <th>Invoice ID</th>
+                      <th>Vendor</th>
+                      <th>Input Type</th>
+                      <th>Amount ($)</th>
+                      <th>Confidence</th>
+                      <th>Status</th>
+                      <th>Created Date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="inspectUserTableBody">
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
+
+        <!-- Admin Sub-section 2: Flow Check & Processing Engine -->
+        <div id="adminSubSectionEngine" class="admin-sub-section">
+          <div class="engine-dashboard" style="margin-top: 32px;">
+            <div class="admin-controls-card">
+              <div class="admin-head">
+                <span>⚙️ <strong>RPA Engine Administration & Tuning</strong></span>
+                <button id="adminResetBtn" class="btn sm danger" onclick="confirmResetDatabase()">
+                  🗑️ Purge MongoDB Database
+                </button>
+              </div>
+              <div class="admin-actions-flex">
+                <div class="control-group">
+                  <label for="ocrConfidenceRange">Min Confidence Threshold: <strong
+                      id="ocrScoreLabel">90%</strong></label>
+                  <input type="range" id="ocrConfidenceRange" min="70" max="99" value="90"
+                    oninput="document.getElementById('ocrScoreLabel').textContent = this.value + '%'">
+                </div>
+                <button class="btn sm secondary" onclick="simulateEngineDiagnostic()">⚡ Run Engine Diagnostics</button>
+                <button class="btn sm ghost" onclick="clearLogsConsole()">🧹 Clear Console Logs</button>
+              </div>
+            </div>
+
+            <div class="engine-pipeline-visual">
+              <div class="pipeline-step active" id="step1">
+                <span class="num">1</span>
+                <h4>Input Parsing</h4>
+                <p>Format Detection & Extraction</p>
+              </div>
+              <div class="pipeline-step active" id="step2">
+                <span class="num">2</span>
+                <h4>Pattern Extraction</h4>
+                <p>Regex & OCR Field Match</p>
+              </div>
+              <div class="pipeline-step active" id="step3">
+                <span class="num">3</span>
+                <h4>Validation Rules</h4>
+                <p>Subtotal + Tax = Total</p>
+              </div>
+              <div class="pipeline-step active" id="step4">
+                <span class="num">4</span>
+                <h4>MongoDB Sync</h4>
+                <p>Doc Insertion & Indexing</p>
+              </div>
+            </div>
+
+            <div class="engine-log-console">
+              <div class="console-head">
+                <span>⚡ System Engine & Processing Logs</span>
+                <button class="btn xs ghost" onclick="clearLogsConsole()">Clear Console</button>
+              </div>
+              <pre class="console-body" id="consoleLogs">
+[ENGINE_INIT] Pipeline standby. Admin active monitoring...
+[MONGO_DRIVER] Connected to MongoDB Database 'smart_invoice_db'.
+              </pre>
+            </div>
+          </div>
+        </div>
+
+        <!-- Admin Sub-section 3: Raw MongoDB Collection View -->
+        <div id="adminSubSectionMongo" class="admin-sub-section">
+          <div class="mongodb-viewer" style="margin-top: 32px;">
+            <div class="mongodb-header">
+              <div>
+                <h3>MongoDB Collection: <code>invoices</code></h3>
+                <p>Database: <code>smart_invoice_db</code> | Primary Key: <code>_id</code></p>
+              </div>
+              <div class="filter-controls" style="display:flex; gap:12px; align-items:center;">
+                <select id="dbStatusFilter" onchange="renderMongoDBTable()">
+                  <option value="ALL">All Statuses</option>
+                  <option value="PENDING">PENDING</option>
+                  <option value="APPROVED">APPROVED</option>
+                  <option value="REJECTED">REJECTED</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="table-container">
+              <table class="db-table">
+                <thead>
+                  <tr>
+                    <th>_id / Invoice #</th>
+                    <th>Created By (User)</th>
+                    <th>Vendor Details</th>
+                    <th>Total ($)</th>
+                    <th>Confidence</th>
+                    <th>Status</th>
+                    <th>Logs</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="mongoTableBody">
+                  <!-- Dynamic MongoDB Docs -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
       </section>
 
     </main>
@@ -406,100 +767,7 @@
     </div>
   </div>
 
-  <!-- USER SIGN UP & LOG IN AUTHENTICATION MODAL -->
-  <div class="modal-overlay" id="authModal">
-    <div class="modal-content auth-modal-box">
-      <div class="modal-header">
-        <div class="auth-header-title">
-          <span class="auth-logo-icon">🔒</span>
-          <div>
-            <h3 id="authModalHeading">MongoDB User Authentication</h3>
-            <p id="authModalSubheading">Sign in or register account stored in MongoDB database</p>
-          </div>
-        </div>
-        <button class="close-btn" onclick="closeAuthModal()">✕</button>
-      </div>
-
-      <!-- Auth Tabs: Sign In / Sign Up -->
-      <div class="auth-tabs">
-        <button class="auth-tab active" id="tabBtnSignIn" onclick="switchAuthTab('login')">🔑 Sign In</button>
-        <button class="auth-tab" id="tabBtnSignUp" onclick="switchAuthTab('signup')">📝 Create Account (Sign Up)</button>
-      </div>
-
-      <!-- Notification Message Alert -->
-      <div id="authAlert" class="auth-alert" style="display:none;"></div>
-
-      <div class="modal-body">
-        <!-- LOGIN FORM -->
-        <form id="loginForm" onsubmit="handleLoginSubmit(event)" class="auth-form">
-          <div class="form-group">
-            <label for="loginEmail">Email Address</label>
-            <input type="email" id="loginEmail" class="form-input" placeholder="e.g. user@invoice.com or manager@invoice.com" required>
-          </div>
-
-          <div class="form-group">
-            <label for="loginPassword">Password</label>
-            <input type="password" id="loginPassword" class="form-input" placeholder="••••••••" required>
-          </div>
-
-          <button type="submit" class="btn primary auth-submit-btn">
-            Sign In & Connect Session
-          </button>
-        </form>
-
-        <!-- SIGN UP FORM -->
-        <form id="signupForm" onsubmit="handleSignupSubmit(event)" class="auth-form" style="display:none;">
-          <div class="form-group">
-            <label for="signupName">Full Name</label>
-            <input type="text" id="signupName" class="form-input" placeholder="e.g. Sarah Jenkins" required>
-          </div>
-
-          <div class="form-group">
-            <label for="signupEmail">Email Address</label>
-            <input type="email" id="signupEmail" class="form-input" placeholder="e.g. sarah@company.com" required>
-          </div>
-
-          <div class="form-group">
-            <label for="signupPassword">Password</label>
-            <input type="password" id="signupPassword" class="form-input" placeholder="••••••••" required minlength="6">
-          </div>
-
-          <div class="form-group">
-            <label for="signupRole">Account Access Role</label>
-            <select id="signupRole" class="form-input">
-              <option value="AP_CLERK">👤 Regular User / AP Clerk (Submit & View Invoices)</option>
-              <option value="FINANCE_MANAGER">👑 Management / Finance Manager (Approve & Reject)</option>
-              <option value="ADMIN">⚙️ System Admin (Full Database Access & Purge)</option>
-            </select>
-          </div>
-
-          <button type="submit" class="btn accent auth-submit-btn">
-            Register Account to MongoDB
-          </button>
-        </form>
-
-        <!-- PRE-CONFIGURED MANAGEMENT CREDENTIALS QUICK ASSIST -->
-        <div class="quick-credentials-panel">
-          <div class="panel-head">
-            <span>⚡ Quick Fill Credentials:</span>
-          </div>
-          <div class="quick-cred-buttons">
-            <button type="button" class="cred-chip chip-mgr" onclick="fillQuickCredentials('manager@invoice.com', 'admin123')">
-              👑 Management Login (manager@invoice.com / admin123)
-            </button>
-            <button type="button" class="cred-chip chip-user" onclick="fillQuickCredentials('user@invoice.com', 'user123')">
-              👤 User Login (user@invoice.com / user123)
-            </button>
-            <button type="button" class="cred-chip chip-admin" onclick="fillQuickCredentials('admin@invoice.com', 'admin123')">
-              ⚙️ Admin Login (admin@invoice.com / admin123)
-            </button>
-          </div>
-        </div>
-
-      </div>
-    </div>
-  </div>
-
   <script src="app.js"></script>
 </body>
+
 </html>

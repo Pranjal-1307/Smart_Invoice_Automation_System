@@ -3,6 +3,7 @@ const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const cors = require('cors');
 
 const User = require('./models/User');
 const Invoice = require('./models/Invoice');
@@ -12,6 +13,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/smart_invoice_db';
 
+app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -161,7 +163,7 @@ async function seedDatabase() {
 }
 
 // CSV Parser helper
-async function parseCsvContent(rawCsvText, filename, userEmail) {
+async function parseCsvContent(rawCsvText, filename, userEmail, extraFields = {}) {
   const lines = rawCsvText.split(/\r?\n/).filter(line => line.trim().length > 0);
   const createdInvoices = [];
   
@@ -176,7 +178,8 @@ async function parseCsvContent(rawCsvText, filename, userEmail) {
     const cols = line.split(/[,;\t]/).map(c => c.trim().replace(/^["']|["']$/g, ''));
     if (cols.length < 2) continue;
 
-    let vendor = cols[0] || `Vendor ${idx + 1}`;
+    let parsedVendor = cols[0] || `Vendor ${idx + 1}`;
+    let vendor = extraFields.customVendor || (parsedVendor.length > 2 ? parsedVendor : "Global Enterprise Supplies");
     let invNum = cols[1] && cols[1].startsWith('INV') ? cols[1] : `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
     let total = parseFloat(cols[2] || cols[3] || (200 + Math.random() * 1500).toFixed(2));
     if (isNaN(total) || total <= 0) total = parseFloat((150 + Math.random() * 800).toFixed(2));
@@ -190,9 +193,9 @@ async function parseCsvContent(rawCsvText, filename, userEmail) {
       invoiceNumber: invNum,
       inputType: "DATASET_CSV",
       filename: filename || "dataset.csv",
-      vendor: vendor.length > 2 ? vendor : "Global Enterprise Supplies",
+      vendor: vendor,
       vendorEmail: `${vendor.toLowerCase().replace(/[^a-z0-9]/g, '')}@vendor.com`,
-      date: new Date().toISOString().split('T')[0],
+      date: extraFields.customDate || new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
       subtotal,
       tax,
@@ -203,11 +206,16 @@ async function parseCsvContent(rawCsvText, filename, userEmail) {
         { description: "Dataset Row Imported Item", quantity: 1, unitPrice: subtotal, total: subtotal }
       ],
       processingLogs: [
-        `Parsed CSV dataset file [${filename}] - Row #${idx + 1}`,
+        `Parsed Excel/CSV dataset file [${filename}] - Row #${idx + 1}`,
         `Extracted Vendor: ${vendor}`,
         `Calculated Total ($${total}) from spreadsheet column`,
-        `Direct document inserted into MongoDB 'invoices' collection`
+        extraFields.notes ? `User Note: ${extraFields.notes}` : `Direct document inserted into MongoDB 'invoices' collection`
       ],
+      fileDataUrl: extraFields.fileDataUrl || null,
+      fileType: extraFields.fileType || 'xlsx',
+      fileSize: extraFields.fileSize || null,
+      notes: extraFields.notes || '',
+      customVendor: extraFields.customVendor || '',
       createdBy: userEmail || 'AP Clerk',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -218,7 +226,7 @@ async function parseCsvContent(rawCsvText, filename, userEmail) {
   }
 
   if (createdInvoices.length === 0) {
-    return await runProcessingEngine({ type: "DATASET_CSV", name: filename, userEmail });
+    return await runProcessingEngine({ type: "DATASET_CSV", name: filename, userEmail, ...extraFields });
   }
 
   return createdInvoices;
@@ -226,10 +234,13 @@ async function parseCsvContent(rawCsvText, filename, userEmail) {
 
 // Processing Engine Helper
 async function runProcessingEngine(inputData) {
-  const { type, name, fileData, userEmail } = inputData;
+  const { type, name, fileData, userEmail, customVendor, customDate, notes, fileDataUrl, fileSize, fileType } = inputData;
+
+  const rawUrl = fileDataUrl || (fileData && fileData.rawContent ? fileData.rawContent : null);
+  const extractedFileType = fileType || (name ? (name.endsWith('.pdf') ? 'pdf' : name.endsWith('.xlsx') || name.endsWith('.xls') ? 'xlsx' : name.endsWith('.csv') ? 'csv' : 'pdf') : 'pdf');
 
   if (fileData && fileData.rawContent && typeof fileData.rawContent === 'string' && !fileData.rawContent.startsWith('data:')) {
-    return await parseCsvContent(fileData.rawContent, name, userEmail);
+    return await parseCsvContent(fileData.rawContent, name, userEmail, { customVendor, customDate, notes, fileDataUrl: rawUrl, fileSize, fileType: extractedFileType });
   }
 
   const count = type === 'MULTIPLE_PDF' ? Math.floor(Math.random() * 3) + 2 : 1;
@@ -245,6 +256,11 @@ async function runProcessingEngine(inputData) {
 
   for (let i = 0; i < count; i++) {
     const randomVendor = vendors[Math.floor(Math.random() * vendors.length)];
+    const vendorName = customVendor && customVendor.trim() ? customVendor.trim() : randomVendor.name;
+    const vendorEmail = customVendor && customVendor.trim() 
+      ? `${customVendor.toLowerCase().replace(/[^a-z0-9]/g, '')}@vendor.com` 
+      : randomVendor.email;
+
     const randomInvNum = "INV-" + Math.floor(10000 + Math.random() * 90000);
     const subtotal = parseFloat((150 + Math.random() * 2500).toFixed(2));
     const tax = parseFloat((subtotal * 0.08).toFixed(2));
@@ -255,10 +271,10 @@ async function runProcessingEngine(inputData) {
       id: `INV-2026-${Math.floor(100 + Math.random() * 900)}`,
       invoiceNumber: randomInvNum,
       inputType: type,
-      filename: name || `invoice_${Date.now()}_${i+1}.${type === 'DATASET_CSV' ? 'csv' : 'pdf'}`,
-      vendor: randomVendor.name,
-      vendorEmail: randomVendor.email,
-      date: new Date().toISOString().split('T')[0],
+      filename: name || `invoice_${Date.now()}_${i+1}.${extractedFileType === 'xlsx' ? 'xlsx' : extractedFileType === 'csv' ? 'csv' : 'pdf'}`,
+      vendor: vendorName,
+      vendorEmail: vendorEmail,
+      date: customDate || new Date().toISOString().split('T')[0],
       dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
       subtotal,
       tax,
@@ -266,16 +282,22 @@ async function runProcessingEngine(inputData) {
       status: confidence > 0.94 ? "APPROVED" : "PENDING",
       confidenceScore: confidence,
       lineItems: [
-        { description: "Professional Services & Operations", quantity: 1, unitPrice: parseFloat((subtotal * 0.7).toFixed(2)), total: parseFloat((subtotal * 0.7).toFixed(2)) },
-        { description: "Software Licensing & Support", quantity: 1, unitPrice: parseFloat((subtotal * 0.3).toFixed(2)), total: parseFloat((subtotal * 0.3).toFixed(2)) }
+        { description: extractedFileType === 'pdf' ? "PDF Extracted Services & Product Supply" : "Excel Sheet Row Invoice Item", quantity: 1, unitPrice: parseFloat((subtotal * 0.7).toFixed(2)), total: parseFloat((subtotal * 0.7).toFixed(2)) },
+        { description: "Licensing, Handling & Processing", quantity: 1, unitPrice: parseFloat((subtotal * 0.3).toFixed(2)), total: parseFloat((subtotal * 0.3).toFixed(2)) }
       ],
       processingLogs: [
-        `Received ${type} file payload [${name || 'Document'}]`,
-        `OCR Extraction & Layout Analysis complete (Confidence: ${(confidence * 100).toFixed(1)}%)`,
-        `Extracted Vendor: ${randomVendor.name} (${randomVendor.email})`,
+        `Received ${extractedFileType.toUpperCase()} file payload [${name || 'Document'}]`,
+        `RPA Engine & Layout Analysis complete (Confidence: ${(confidence * 100).toFixed(1)}%)`,
+        `Extracted Vendor: ${vendorName} (${vendorEmail})`,
         `Verified Totals: Subtotal ($${subtotal}) + Tax ($${tax}) = Grand Total ($${total})`,
-        `Saved document into MongoDB collection 'invoices' with status: ${confidence > 0.94 ? 'APPROVED' : 'PENDING'}`
+        notes ? `User Attached Remarks: "${notes}"` : `Saved document into MongoDB collection 'invoices'`,
+        `Stored file payload & metadata in MongoDB record`
       ],
+      fileDataUrl: rawUrl,
+      fileType: extractedFileType,
+      fileSize: fileSize || (fileData ? fileData.fileSize : null),
+      notes: notes || '',
+      customVendor: customVendor || '',
       createdBy: userEmail || 'AP Clerk',
       createdAt: new Date(),
       updatedAt: new Date()
@@ -287,7 +309,7 @@ async function runProcessingEngine(inputData) {
 
   await AuditLog.create({
     action: "PROCESSING_ENGINE_RUN",
-    details: `Processed ${type} input (${createdInvoices.length} invoices inserted to MongoDB)`,
+    details: `Processed ${type} (${extractedFileType.toUpperCase()}) input (${createdInvoices.length} invoices inserted to MongoDB)`,
     userEmail: userEmail || 'system'
   });
 
@@ -383,6 +405,33 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+// GET all registered users with submission metrics (For Admin Dashboard)
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await User.find({}, '-password').sort({ createdAt: -1 });
+    const invoices = await Invoice.find();
+
+    const usersWithStats = users.map(u => {
+      const userInvoices = invoices.filter(inv => inv.createdBy === u.email || (u.role === 'AP_CLERK' && !inv.createdBy));
+      return {
+        _id: u._id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        createdAt: u.createdAt,
+        totalSubmitted: userInvoices.length,
+        approvedCount: userInvoices.filter(i => i.status === 'APPROVED').length,
+        pendingCount: userInvoices.filter(i => i.status === 'PENDING').length,
+        rejectedCount: userInvoices.filter(i => i.status === 'REJECTED').length
+      };
+    });
+
+    res.json({ success: true, count: usersWithStats.length, users: usersWithStats });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // INVOICE API ROUTES (REAL MONGODB)
 
 app.get('/api/invoices', async (req, res) => {
@@ -417,17 +466,53 @@ app.get('/api/stats', async (req, res) => {
 
 app.post('/api/process', async (req, res) => {
   try {
-    const { inputType, fileName, fileData, role } = req.body;
+    const { inputType, fileName, fileData, role, customVendor, customDate, notes, fileDataUrl, fileSize, fileType } = req.body;
     const userRole = req.headers['x-user-role'] || role || 'AP_CLERK';
     const userEmail = req.headers['x-user-email'] || 'user@invoice.com';
 
     if (!inputType) {
       return res.status(400).json({ success: false, message: "inputType is required" });
     }
-    const results = await runProcessingEngine({ type: inputType, name: fileName, fileData, userRole, userEmail });
+    const results = await runProcessingEngine({
+      type: inputType,
+      name: fileName,
+      fileData,
+      userRole,
+      userEmail,
+      customVendor,
+      customDate,
+      notes,
+      fileDataUrl,
+      fileSize,
+      fileType
+    });
     res.json({ success: true, message: `Processing Engine executed and stored in MongoDB`, processed: results });
   } catch (err) {
     console.error("Process error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// File Download Endpoint
+app.get('/api/invoices/:id/download', async (req, res) => {
+  try {
+    const inv = await Invoice.findOne({ id: req.params.id });
+    if (!inv || !inv.fileDataUrl) {
+      return res.status(404).json({ success: false, message: "Uploaded file record not found" });
+    }
+
+    const matches = inv.fileDataUrl.match(/^data:(.+);base64,(.+)$/);
+    if (!matches) {
+      return res.status(400).json({ success: false, message: "Invalid file data format" });
+    }
+
+    const contentType = matches[1];
+    const buffer = Buffer.from(matches[2], 'base64');
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${inv.filename || 'invoice_document'}"`);
+    res.send(buffer);
+  } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });

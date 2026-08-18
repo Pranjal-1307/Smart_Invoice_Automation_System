@@ -38,6 +38,11 @@ const invoiceSchema = new mongoose.Schema({
   confidenceScore: Number,
   lineItems: [lineItemSchema],
   processingLogs: [String],
+  fileDataUrl: String,
+  fileType: String,
+  fileSize: Number,
+  notes: String,
+  customVendor: String,
   createdBy: {
     type: String,
     default: 'AP Clerk'
