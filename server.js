@@ -187,10 +187,19 @@ async function runProcessingEngine(inputData) {
       customDate
     });
 
+    let resolvedInputType = type || "SINGLE_PDF";
+    if (resolvedInputType === "SINGLE_PDF") {
+      if (extractedFileType === "xlsx" || extractedFileType === "xls") {
+        resolvedInputType = "SINGLE_EXCEL";
+      } else if (extractedFileType === "csv") {
+        resolvedInputType = "SINGLE_CSV";
+      }
+    }
+
     const invoiceObj = {
       id: `INV-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
-      invoiceNumber: extracted.invoiceNumber,
-      inputType: type || "SINGLE_PDF",
+      invoiceNumber: (extracted.invoiceNumber && extracted.invoiceNumber.trim().length > 0) ? extracted.invoiceNumber.trim() : `INV-UNPARSED-${Date.now().toString().slice(-4)}`,
+      inputType: resolvedInputType,
       filename: batchFileName,
       vendor: extracted.vendor,
       vendorEmail: extracted.vendorEmail,

@@ -1,0 +1,12 @@
+Invoice Number,INV-3003
+Vendor,Global Logistics
+Invoice Date,2026-08-12
+Currency,USD
+
+Description,Qty,Unit Price,Amount
+"Shipping, Handling, and Freight",1,250,250
+"Cloud Platform, Premium Package",2,12500,25000
+
+Subtotal,,,25250
+Tax,,,2525
+Total,,,27775

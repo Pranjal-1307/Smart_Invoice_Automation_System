@@ -1,0 +1,12 @@
+Invoice Number,INV-4004
+Vendor,Euro-US Trading GmbH
+Invoice Date,2026-08-13
+Currency,EUR
+
+Description,Qty,Unit Price,Amount
+Consulting (USD Rate),10,150,1500
+Software License (EUR Rate),1,2000,2000
+
+Subtotal,,,3500
+Tax,,,700
+Total,,,4200

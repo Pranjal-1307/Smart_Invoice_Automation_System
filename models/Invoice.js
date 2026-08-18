@@ -14,10 +14,26 @@ const lineItemSchema = new mongoose.Schema({
 }, { _id: false });
 
 const extractionSchema = new mongoose.Schema({
+  fileType: {
+    type: String,
+    default: 'PDF'
+  },
   method: {
     type: String,
-    enum: ['PDF_TEXT', 'OCR', 'EXTRACTION_FAILED'],
+    enum: ['PDF_TEXT', 'OCR', 'SPREADSHEET', 'CSV', 'EXTRACTION_FAILED'],
     default: 'PDF_TEXT'
+  },
+  sheetName: {
+    type: String,
+    default: null
+  },
+  rowCount: {
+    type: Number,
+    default: null
+  },
+  columnCount: {
+    type: Number,
+    default: null
   },
   ocrUsed: {
     type: Boolean,
@@ -45,7 +61,7 @@ const extractionSchema = new mongoose.Schema({
 const validationSchema = new mongoose.Schema({
   status: {
     type: String,
-    enum: ['VALID', 'WARNING', 'FAILED', 'EXTRACTION_FAILED'],
+    enum: ['VALID', 'WARNING', 'FAILED', 'PARTIAL', 'EXTRACTION_FAILED'],
     default: 'VALID'
   },
   subtotalMatch: {
@@ -89,7 +105,7 @@ const invoiceSchema = new mongoose.Schema({
   },
   inputType: {
     type: String,
-    enum: ['SINGLE_PDF', 'MULTIPLE_PDF', 'DATASET_CSV'],
+    enum: ['SINGLE_PDF', 'MULTIPLE_PDF', 'DATASET_CSV', 'SINGLE_EXCEL', 'SINGLE_CSV'],
     default: 'SINGLE_PDF'
   },
   filename: String,

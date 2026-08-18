@@ -1,0 +1,12 @@
+Invoice Number;INV-2002
+Vendor;Nexora Services
+Invoice Date;2026-08-11
+Currency;EUR
+
+Description;Qty;Unit Price;Amount
+Service X;1;1500;1500
+Service Y;2;600;1200
+
+Subtotal;;;2700
+Tax;;;540
+Total;;;3240

@@ -1,0 +1,12 @@
+Invoice Number,INV-1001
+Vendor,ABC Corporation
+Invoice Date,2026-08-10
+Currency,USD
+
+Description,Qty,Unit Price,Amount
+Product A,2,500,1000
+Product B,3,250,750
+
+Subtotal,,,1750
+Tax,,,140
+Total,,,1890
