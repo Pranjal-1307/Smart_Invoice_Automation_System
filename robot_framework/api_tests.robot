@@ -15,14 +15,14 @@ Test Ingest Single PDF Invoice Endpoint
     Length Should Be    ${processed}    1
     ${inv}=    Get From List    ${processed}    0
     Should Be Equal As Strings    ${inv['filename']}    Test_Single_Invoice.pdf
-    Validate Invoice Totals    ${inv['subtotal']}    ${inv['tax']}    ${inv['total']}
+    Validate Invoice Totals    ${inv['subtotal']}    ${inv['tax']}    ${inv['total']}    ${inv.get('shipping', 0)}
 
 Test Ingest Multiple PDF Batch Endpoint
     [Documentation]    Validates batch PDF ingestion API
     ${processed}=    Process Multiple PDF Batch    Batch_Test_001.pdf
     Should Be True    len(${processed}) >= 2
     FOR    ${inv}    IN    @{processed}
-        Validate Invoice Totals    ${inv['subtotal']}    ${inv['tax']}    ${inv['total']}
+        Validate Invoice Totals    ${inv['subtotal']}    ${inv['tax']}    ${inv['total']}    ${inv.get('shipping', 0)}
     END
 
 Test Ingest Dataset CSV Endpoint

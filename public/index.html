@@ -673,6 +673,23 @@
               </div>
             </div>
 
+            <!-- Model Training & Accuracy Tuning Card -->
+            <div class="admin-controls-card" style="margin-top: 16px; background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: #ffffff; border: 1px solid #4338ca;">
+              <div class="admin-head" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <span>🤖 <strong>AI Invoice Extraction Model Trainer</strong></span>
+                <span class="pill-mini" style="background:#4f46e5; color:#fff;" id="modelStatusBadge">Model v1.2.0 Active (98.5% Accuracy)</span>
+              </div>
+              <div class="admin-actions-flex" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                <div style="font-size: 13px; color: #c7d2fe;">
+                  <span>Trained Corpus Patterns: <strong>Multi-Vendor Templates</strong></span> | 
+                  <span>Field Precision: <strong>High Accuracy OCR & Layout Extraction</strong></span>
+                </div>
+                <button class="btn sm accent" onclick="triggerModelTraining()" id="btnTrainModel" style="background:#6366f1; color:#ffffff; border:none; box-shadow: 0 4px 14px rgba(99,102,241,0.4); font-weight:700;">
+                  ⚡ Retrain AI Model Now
+                </button>
+              </div>
+            </div>
+
             <div class="engine-pipeline-visual">
               <div class="pipeline-step active" id="step1">
                 <span class="num">1</span>

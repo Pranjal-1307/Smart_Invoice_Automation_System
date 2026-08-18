@@ -9,21 +9,35 @@ class InvoiceLibrary:
     ROBOT_LIBRARY_SCOPE = 'GLOBAL'
 
     @keyword("Validate Invoice Totals")
-    def validate_invoice_totals(self, subtotal, tax, total):
-        """Validates that subtotal + tax equals total within 0.01 tolerance."""
-        calc_total = round(float(subtotal) + float(tax), 2)
+    def validate_invoice_totals(self, subtotal, tax, total, shipping=0.0):
+        """Validates that subtotal + tax + shipping equals total within 0.01 tolerance."""
+        calc_total = round(float(subtotal) + float(tax) + float(shipping), 2)
         actual_total = round(float(total), 2)
         if abs(calc_total - actual_total) > 0.02:
-            raise AssertionError(f"Total mismatch: Subtotal ({subtotal}) + Tax ({tax}) = {calc_total}, but got {actual_total}")
+            raise AssertionError(f"Total mismatch: Subtotal ({subtotal}) + Tax ({tax}) + Shipping ({shipping}) = {calc_total}, but got {actual_total}")
         return True
 
     @keyword("Generate Mock Invoice Payload")
     def generate_mock_invoice_payload(self, input_type="SINGLE_PDF", filename="RPA_Generated_Invoice.pdf"):
-        """Generates mock JSON payload for the ingestion endpoint."""
+        """Generates realistic invoice payload for the ingestion endpoint."""
+        import os, base64
+        pdf_path = os.path.join(os.path.dirname(__file__), "..", "..", "big_demo_invoice_usd.pdf")
+        if os.path.exists(pdf_path):
+            with open(pdf_path, "rb") as f:
+                data_url = "data:application/pdf;base64," + base64.b64encode(f.read()).decode('utf-8')
+            return {
+                "inputType": input_type,
+                "fileName": filename,
+                "fileDataUrl": data_url,
+                "fileType": "pdf"
+            }
+        
+        sample_text = f"INVOICE # INV-USD-2026-0847\nVendor: NEXORA TECHNOLOGIES LLC (billing@nexoratech.example)\nDate: 2026-08-19\nDue Date: 2026-09-18\nCurrency: USD\n1 Item Alpha 1 $100.00 0% $100.00\nSubtotal: $100.00\nTotal Due: $100.00"
         return {
             "inputType": input_type,
             "fileName": filename,
-            "fileContent": f"Base64MockData_{input_type}_{filename}"
+            "fileDataUrl": sample_text,
+            "fileType": "text"
         }
 
     @keyword("Calculate Confidence Tier")

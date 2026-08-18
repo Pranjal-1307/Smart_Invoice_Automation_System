@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "train:model": "node train_model.js",
     "rpa:robot": "python run_robot.py rpa",
     "test:robot": "python run_robot.py api"
   },
@@ -12,6 +13,7 @@
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
     "express": "^4.22.2",
-    "mongoose": "^9.9.2"
+    "mongoose": "^9.9.2",
+    "pdf-parse": "^2.4.5"
   }
 }

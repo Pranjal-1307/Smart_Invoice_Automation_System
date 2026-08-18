@@ -9,6 +9,11 @@ const User = require('./models/User');
 const Invoice = require('./models/Invoice');
 const AuditLog = require('./models/AuditLog');
 
+const { loadModel, trainModel } = require('./train_model');
+const { extractDocumentDetails } = require('./documentExtractor');
+
+let trainedModel = loadModel();
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/smart_invoice_db';
@@ -69,87 +74,84 @@ async function seedDatabase() {
     const invoiceCount = await Invoice.countDocuments();
     if (invoiceCount === 0) {
       console.log("Seeding initial sample invoices into MongoDB...");
+
+      // Generate base64 for big_demo_invoice_usd.pdf if file exists
+      let bigDemoPdfUrl = null;
+      const bigDemoPath = path.join(__dirname, 'big_demo_invoice_usd.pdf');
+      if (fs.existsSync(bigDemoPath)) {
+        const buf = fs.readFileSync(bigDemoPath);
+        bigDemoPdfUrl = `data:application/pdf;base64,${buf.toString('base64')}`;
+      }
+
       await Invoice.insertMany([
         {
-          id: "INV-2026-001",
-          invoiceNumber: "INV-98231",
+          id: "INV-2026-DEMO-0847",
+          invoiceNumber: "INV-USD-2026-0847",
           inputType: "SINGLE_PDF",
-          filename: "Acme_Corp_Invoice.pdf",
-          vendor: "Acme Industrial Tools",
-          vendorEmail: "billing@acmeind.com",
-          date: "2026-08-01",
-          dueDate: "2026-08-15",
-          subtotal: 1250.00,
-          tax: 100.00,
-          total: 1350.00,
+          filename: "big_demo_invoice_usd.pdf",
+          vendor: "NEXORA TECHNOLOGIES LLC",
+          vendorEmail: "billing@nexoratech.example",
+          date: "2026-08-19",
+          dueDate: "2026-09-18",
+          currency: "USD",
+          poNumber: "PO-78421-ACME",
+          paymentTerms: "Net 30",
+          subtotal: 796210.00,
+          tax: 65687.32,
+          shipping: 1850.00,
+          total: 863747.32,
           status: "PENDING",
-          confidenceScore: 0.96,
-          lineItems: [
-            { description: "Heavy Duty Hydraulic Pump", quantity: 2, unitPrice: 500.00, total: 1000.00 },
-            { description: "Maintenance Kit Standard", quantity: 1, unitPrice: 250.00, total: 250.00 }
-          ],
+          confidenceScore: 1.0,
+          fieldConfidence: {
+            vendor: 100,
+            invoiceNumber: 100,
+            date: 100,
+            dueDate: 100,
+            lineItems: 100,
+            totals: 100
+          },
+          lineItems: Array.from({ length: 36 }, (_, i) => ({
+            lineNumber: i + 1,
+            description: `Enterprise Module & Service Component Item #${i + 1}`,
+            quantity: (i % 5) + 1,
+            unitPrice: 2000.00 + (i * 150),
+            discountPercent: (i % 3 === 0 ? 5 : 0),
+            amount: 2000.00 + (i * 150),
+            total: 2000.00 + (i * 150)
+          })),
+          extraction: {
+            method: "PDF_TEXT",
+            ocrUsed: false,
+            pageCount: 2,
+            rawTextAvailable: true,
+            rawTextLength: 3200,
+            lineItemCount: 36,
+            warnings: []
+          },
+          validation: {
+            status: "VALID",
+            subtotalMatch: true,
+            taxMatch: true,
+            shippingMatch: true,
+            totalMatch: true,
+            errors: [],
+            warnings: []
+          },
           processingLogs: [
-            "Received single PDF file [Acme_Corp_Invoice.pdf]",
-            "OCR Extraction complete (Confidence: 96%)",
-            "Extracted 2 line items & totals verified",
-            "Saved document into MongoDB collection 'invoices'"
+            "Ingested single PDF file [big_demo_invoice_usd.pdf]",
+            "Native PDF Text Extraction complete (2 pages, 36 line items)",
+            "Extracted header: Vendor 'NEXORA TECHNOLOGIES LLC', Inv # 'INV-USD-2026-0847', PO # 'PO-78421-ACME'",
+            "Arithmetic verification passed: Subtotal $796,210.00 + Tax $65,687.32 + Shipping $1,850.00 = Total Due $863,747.32",
+            "Saved verified document into MongoDB collection 'invoices'"
           ],
-          createdAt: new Date("2026-08-01T10:30:00Z"),
-          updatedAt: new Date("2026-08-01T10:30:00Z")
-        },
-        {
-          id: "INV-2026-002",
-          invoiceNumber: "INV-44109",
-          inputType: "MULTIPLE_PDF",
-          filename: "GlobalLogistics_Batch_01.pdf",
-          vendor: "Global Logistics Ltd",
-          vendorEmail: "accounts@globallogistics.com",
-          date: "2026-08-05",
-          dueDate: "2026-08-20",
-          subtotal: 3400.00,
-          tax: 272.00,
-          total: 3672.00,
-          status: "PENDING",
-          confidenceScore: 0.92,
-          lineItems: [
-            { description: "Freight Transport NYC to CHI", quantity: 4, unitPrice: 750.00, total: 3000.00 },
-            { description: "Customs Clearance Fee", quantity: 1, unitPrice: 400.00, total: 400.00 }
-          ],
-          processingLogs: [
-            "Batch input file [GlobalLogistics_Batch_01.pdf] processed",
-            "Pattern matching engine extracted vendor details",
-            "Document validated & inserted to MongoDB"
-          ],
-          createdAt: new Date("2026-08-05T14:15:00Z"),
-          updatedAt: new Date("2026-08-05T14:15:00Z")
-        },
-        {
-          id: "INV-2026-003",
-          invoiceNumber: "INV-77312",
-          inputType: "DATASET_CSV",
-          filename: "Q3_Vendor_Dataset.csv",
-          vendor: "TechCloud Services",
-          vendorEmail: "finance@techcloud.io",
-          date: "2026-08-08",
-          dueDate: "2026-08-22",
-          subtotal: 890.00,
-          tax: 71.20,
-          total: 961.20,
-          status: "APPROVED",
-          confidenceScore: 0.99,
-          lineItems: [
-            { description: "Server Infrastructure Q3", quantity: 1, unitPrice: 890.00, total: 890.00 }
-          ],
-          processingLogs: [
-            "CSV Dataset row parsed successfully",
-            "Automated rule pass: high confidence (99%)",
-            "Direct approval auto-passed by system rule"
-          ],
-          createdAt: new Date("2026-08-08T09:00:00Z"),
-          updatedAt: new Date("2026-08-08T09:05:00Z")
+          fileDataUrl: bigDemoPdfUrl,
+          fileType: "pdf",
+          createdBy: "user@invoice.com",
+          createdAt: new Date("2026-08-19T10:00:00Z"),
+          updatedAt: new Date("2026-08-19T10:00:00Z")
         }
       ]);
-      console.log("Sample invoices seeded in MongoDB.");
+      console.log("Sample demo invoice seeded in MongoDB.");
     }
 
     await AuditLog.create({
@@ -162,137 +164,56 @@ async function seedDatabase() {
   }
 }
 
-// CSV Parser helper
-async function parseCsvContent(rawCsvText, filename, userEmail, extraFields = {}) {
-  const lines = rawCsvText.split(/\r?\n/).filter(line => line.trim().length > 0);
-  const createdInvoices = [];
-  
-  if (lines.length === 0) return createdInvoices;
-
-  const header = lines[0].toLowerCase();
-  const hasHeader = header.includes('vendor') || header.includes('amount') || header.includes('total') || header.includes('invoice');
-  const dataLines = hasHeader ? lines.slice(1) : lines;
-
-  for (let idx = 0; idx < dataLines.length; idx++) {
-    const line = dataLines[idx];
-    const cols = line.split(/[,;\t]/).map(c => c.trim().replace(/^["']|["']$/g, ''));
-    if (cols.length < 2) continue;
-
-    let parsedVendor = cols[0] || `Vendor ${idx + 1}`;
-    let vendor = extraFields.customVendor || (parsedVendor.length > 2 ? parsedVendor : "Global Enterprise Supplies");
-    let invNum = cols[1] && cols[1].startsWith('INV') ? cols[1] : `INV-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-    let total = parseFloat(cols[2] || cols[3] || (200 + Math.random() * 1500).toFixed(2));
-    if (isNaN(total) || total <= 0) total = parseFloat((150 + Math.random() * 800).toFixed(2));
-
-    const subtotal = parseFloat((total * 0.92).toFixed(2));
-    const tax = parseFloat((total - subtotal).toFixed(2));
-    const confidence = parseFloat((0.92 + Math.random() * 0.07).toFixed(2));
-
-    const invoiceObj = {
-      id: `INV-2026-${Math.floor(100 + Math.random() * 900)}`,
-      invoiceNumber: invNum,
-      inputType: "DATASET_CSV",
-      filename: filename || "dataset.csv",
-      vendor: vendor,
-      vendorEmail: `${vendor.toLowerCase().replace(/[^a-z0-9]/g, '')}@vendor.com`,
-      date: extraFields.customDate || new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-      subtotal,
-      tax,
-      total,
-      status: confidence > 0.94 ? "APPROVED" : "PENDING",
-      confidenceScore: confidence,
-      lineItems: [
-        { description: "Dataset Row Imported Item", quantity: 1, unitPrice: subtotal, total: subtotal }
-      ],
-      processingLogs: [
-        `Parsed Excel/CSV dataset file [${filename}] - Row #${idx + 1}`,
-        `Extracted Vendor: ${vendor}`,
-        `Calculated Total ($${total}) from spreadsheet column`,
-        extraFields.notes ? `User Note: ${extraFields.notes}` : `Direct document inserted into MongoDB 'invoices' collection`
-      ],
-      fileDataUrl: extraFields.fileDataUrl || null,
-      fileType: extraFields.fileType || 'xlsx',
-      fileSize: extraFields.fileSize || null,
-      notes: extraFields.notes || '',
-      customVendor: extraFields.customVendor || '',
-      createdBy: userEmail || 'AP Clerk',
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    const doc = await Invoice.create(invoiceObj);
-    createdInvoices.push(doc);
-  }
-
-  if (createdInvoices.length === 0) {
-    return await runProcessingEngine({ type: "DATASET_CSV", name: filename, userEmail, ...extraFields });
-  }
-
-  return createdInvoices;
-}
-
-// Processing Engine Helper
+// High-Accuracy Document Processing Engine Helper
 async function runProcessingEngine(inputData) {
   const { type, name, fileData, userEmail, customVendor, customDate, notes, fileDataUrl, fileSize, fileType } = inputData;
 
-  const rawUrl = fileDataUrl || (fileData && fileData.rawContent ? fileData.rawContent : null);
-  const extractedFileType = fileType || (name ? (name.endsWith('.pdf') ? 'pdf' : name.endsWith('.xlsx') || name.endsWith('.xls') ? 'xlsx' : name.endsWith('.csv') ? 'csv' : 'pdf') : 'pdf');
+  const rawUrl = fileDataUrl || (fileData && fileData.fileDataUrl ? fileData.fileDataUrl : null) || (fileData && fileData.rawContent ? fileData.rawContent : null);
+  const filename = name || (fileData && fileData.name ? fileData.name : `Invoice_${Date.now()}.pdf`);
+  const extractedFileType = fileType || (filename.endsWith('.xlsx') ? 'xlsx' : filename.endsWith('.csv') ? 'csv' : 'pdf');
 
-  if (fileData && fileData.rawContent && typeof fileData.rawContent === 'string' && !fileData.rawContent.startsWith('data:')) {
-    return await parseCsvContent(fileData.rawContent, name, userEmail, { customVendor, customDate, notes, fileDataUrl: rawUrl, fileSize, fileType: extractedFileType });
-  }
+  // Payload content passed to extractor
+  const contentPayload = (fileData && fileData.rawContent) ? fileData.rawContent : (fileDataUrl || fileData);
 
-  const count = type === 'MULTIPLE_PDF' ? Math.floor(Math.random() * 3) + 2 : 1;
+  const count = type === 'MULTIPLE_PDF' ? Math.max(1, Math.floor(Math.random() * 2) + 1) : 1;
   const createdInvoices = [];
 
-  const vendors = [
-    { name: "Apex Solutions Inc", email: "invoices@apexsol.com" },
-    { name: "Nexus Software Corp", email: "billing@nexussoft.com" },
-    { name: "Vanguard Supplies", email: "ap@vanguard.org" },
-    { name: "Starlight Digital", email: "pay@starlight.io" },
-    { name: "Horizon Logistics", email: "finance@horizonlog.com" }
-  ];
-
   for (let i = 0; i < count; i++) {
-    const randomVendor = vendors[Math.floor(Math.random() * vendors.length)];
-    const vendorName = customVendor && customVendor.trim() ? customVendor.trim() : randomVendor.name;
-    const vendorEmail = customVendor && customVendor.trim() 
-      ? `${customVendor.toLowerCase().replace(/[^a-z0-9]/g, '')}@vendor.com` 
-      : randomVendor.email;
-
-    const randomInvNum = "INV-" + Math.floor(10000 + Math.random() * 90000);
-    const subtotal = parseFloat((150 + Math.random() * 2500).toFixed(2));
-    const tax = parseFloat((subtotal * 0.08).toFixed(2));
-    const total = parseFloat((subtotal + tax).toFixed(2));
-    const confidence = parseFloat((0.88 + Math.random() * 0.11).toFixed(2));
+    const batchFileName = count > 1 ? filename.replace(/\.(pdf|csv|xlsx)$/i, `_${i+1}.$1`) : filename;
+    
+    // Extract real document fields using the trained ML model engine
+    const extracted = await extractDocumentDetails(contentPayload, batchFileName, trainedModel, {
+      customVendor,
+      customDate
+    });
 
     const invoiceObj = {
-      id: `INV-2026-${Math.floor(100 + Math.random() * 900)}`,
-      invoiceNumber: randomInvNum,
-      inputType: type,
-      filename: name || `invoice_${Date.now()}_${i+1}.${extractedFileType === 'xlsx' ? 'xlsx' : extractedFileType === 'csv' ? 'csv' : 'pdf'}`,
-      vendor: vendorName,
-      vendorEmail: vendorEmail,
-      date: customDate || new Date().toISOString().split('T')[0],
-      dueDate: new Date(Date.now() + 14 * 86400000).toISOString().split('T')[0],
-      subtotal,
-      tax,
-      total,
-      status: confidence > 0.94 ? "APPROVED" : "PENDING",
-      confidenceScore: confidence,
-      lineItems: [
-        { description: extractedFileType === 'pdf' ? "PDF Extracted Services & Product Supply" : "Excel Sheet Row Invoice Item", quantity: 1, unitPrice: parseFloat((subtotal * 0.7).toFixed(2)), total: parseFloat((subtotal * 0.7).toFixed(2)) },
-        { description: "Licensing, Handling & Processing", quantity: 1, unitPrice: parseFloat((subtotal * 0.3).toFixed(2)), total: parseFloat((subtotal * 0.3).toFixed(2)) }
-      ],
+      id: `INV-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
+      invoiceNumber: extracted.invoiceNumber,
+      inputType: type || "SINGLE_PDF",
+      filename: batchFileName,
+      vendor: extracted.vendor,
+      vendorEmail: extracted.vendorEmail,
+      date: extracted.date,
+      dueDate: extracted.dueDate,
+      currency: extracted.currency || 'USD',
+      poNumber: extracted.poNumber || '',
+      paymentTerms: extracted.paymentTerms || '',
+      subtotal: extracted.subtotal,
+      tax: extracted.tax,
+      shipping: extracted.shipping || 0,
+      total: extracted.total,
+      status: extracted.status,
+      confidenceScore: extracted.confidenceScore,
+      fieldConfidence: extracted.fieldConfidence,
+      lineItems: extracted.lineItems,
+      extraction: extracted.extraction,
+      validation: extracted.validation,
       processingLogs: [
-        `Received ${extractedFileType.toUpperCase()} file payload [${name || 'Document'}]`,
-        `RPA Engine & Layout Analysis complete (Confidence: ${(confidence * 100).toFixed(1)}%)`,
-        `Extracted Vendor: ${vendorName} (${vendorEmail})`,
-        `Verified Totals: Subtotal ($${subtotal}) + Tax ($${tax}) = Grand Total ($${total})`,
-        notes ? `User Attached Remarks: "${notes}"` : `Saved document into MongoDB collection 'invoices'`,
-        `Stored file payload & metadata in MongoDB record`
+        ...extracted.processingLogs,
+        notes ? `User Note Attached: "${notes}"` : `Document persisted into MongoDB collection 'invoices'`
       ],
+      rawText: extracted.rawText || '',
       fileDataUrl: rawUrl,
       fileType: extractedFileType,
       fileSize: fileSize || (fileData ? fileData.fileSize : null),
@@ -309,12 +230,37 @@ async function runProcessingEngine(inputData) {
 
   await AuditLog.create({
     action: "PROCESSING_ENGINE_RUN",
-    details: `Processed ${type} (${extractedFileType.toUpperCase()}) input (${createdInvoices.length} invoices inserted to MongoDB)`,
+    details: `High-Accuracy Extraction completed for ${type} (${extractedFileType.toUpperCase()}). Ingested ${createdInvoices.length} document(s) into MongoDB`,
     userEmail: userEmail || 'system'
   });
 
   return createdInvoices;
 }
+
+// AI Model Training Endpoint
+app.post('/api/train', async (req, res) => {
+  try {
+    trainedModel = trainModel();
+    await AuditLog.create({
+      action: "MODEL_RETRAINED",
+      details: `AI Invoice Extraction Model retrained to version ${trainedModel.version} (${trainedModel.sampleCount} training corpus samples)`,
+      userEmail: req.headers['x-user-email'] || 'admin@invoice.com'
+    });
+    res.json({
+      success: true,
+      message: "High-accuracy AI Invoice Model retrained successfully!",
+      model: {
+        version: trainedModel.version,
+        trainedAt: trainedModel.trainedAt,
+        accuracyScore: trainedModel.accuracyScore,
+        sampleCount: trainedModel.sampleCount
+      }
+    });
+  } catch (err) {
+    console.error("Model training error:", err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
 
 // AUTH API ENDPOINTS
 

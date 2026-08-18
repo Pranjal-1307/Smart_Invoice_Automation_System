@@ -1208,11 +1208,11 @@ function appendLog(msg) {
 
 // Modal Inspection functions
 function inspectInvoice(id) {
-  const inv = currentInvoices.find(i => i.id === id);
+  const inv = currentInvoices.find(i => i.id === id || i._id === id);
   if (!inv) return;
 
   const modalBody = document.getElementById('modalBody');
-  document.getElementById('modalTitle').textContent = `Invoice Document Inspection: ${inv.invoiceNumber} (${inv.vendor})`;
+  document.getElementById('modalTitle').textContent = `Invoice Inspection: ${inv.invoiceNumber || inv.id} (${inv.vendor || 'Unknown Vendor'})`;
 
   const isPdf = inv.fileType === 'pdf' || (inv.filename && inv.filename.endsWith('.pdf')) || (inv.fileDataUrl && inv.fileDataUrl.includes('application/pdf'));
   const isExcel = inv.fileType === 'xlsx' || inv.fileType === 'xls' || inv.fileType === 'csv' || inv.inputType === 'DATASET_CSV' || (inv.filename && (inv.filename.endsWith('.xlsx') || inv.filename.endsWith('.xls') || inv.filename.endsWith('.csv')));
@@ -1223,10 +1223,10 @@ function inspectInvoice(id) {
     documentPreviewHtml = `
       <div style="margin-bottom: 16px;">
         <div style="font-size:12px; font-weight:700; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center;">
-          <span>📄 UPLOADED PDF PREVIEW (${inv.filename})</span>
+          <span>📄 UPLOADED PDF PREVIEW (${inv.filename || 'Document.pdf'})</span>
           <button class="btn xs secondary" onclick="downloadInvoiceFile('${inv.id}')">📥 Download PDF</button>
         </div>
-        <iframe src="${inv.fileDataUrl}" style="width:100%; height:300px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc;"></iframe>
+        <iframe src="${inv.fileDataUrl}" style="width:100%; height:260px; border:1px solid #cbd5e1; border-radius:8px; background:#f8fafc;"></iframe>
       </div>
     `;
   } else if (isExcel) {
@@ -1243,37 +1243,74 @@ function inspectInvoice(id) {
     `;
   }
 
-  let lineItemsHtml = (inv.lineItems || []).map(item => `
-    <tr>
-      <td>${item.description}</td>
-      <td>${item.quantity}</td>
-      <td>$${(item.unitPrice || 0).toFixed(2)}</td>
-      <td><strong>$${(item.total || 0).toFixed(2)}</strong></td>
+  // Line items rendering
+  const itemsList = inv.lineItems || [];
+  let lineItemsHtml = itemsList.map((item, index) => `
+    <tr style="border-bottom:1px solid #f1f5f9;">
+      <td style="padding:6px 8px; text-align:center; color:#64748b; font-weight:600;">${item.lineNumber || index + 1}</td>
+      <td style="padding:6px 8px; font-weight:500; color:#0f172a;">${item.description || 'N/A'}</td>
+      <td style="padding:6px 8px; text-align:center;">${item.quantity || 1}</td>
+      <td style="padding:6px 8px; text-align:right;">$${(item.unitPrice || 0).toFixed(2)}</td>
+      <td style="padding:6px 8px; text-align:center; color:#64748b;">${item.discountPercent || 0}%</td>
+      <td style="padding:6px 8px; text-align:right; font-weight:700; color:#0f172a;">$${(item.amount || item.total || 0).toFixed(2)}</td>
     </tr>
   `).join('');
 
+  if (itemsList.length === 0) {
+    lineItemsHtml = `<tr><td colspan="6" style="text-align:center; padding:12px; color:#94a3b8;">No line items extracted.</td></tr>`;
+  }
+
+  // Validation Info
+  const val = inv.validation || { status: 'VALID', errors: [], warnings: [] };
+  const valBadgeColor = val.status === 'VALID' ? '#10b981' : val.status === 'WARNING' ? '#f59e0b' : '#ef4444';
+  const valBadgeBg = val.status === 'VALID' ? '#ecfdf5' : val.status === 'WARNING' ? '#fffbeb' : '#fef2f2';
+
+  // Extraction Info
+  const ext = inv.extraction || { method: 'PDF_TEXT', ocrUsed: false, pageCount: 1, lineItemCount: itemsList.length };
+  const fieldConf = inv.fieldConfidence || {};
+
   modalBody.innerHTML = `
-    <div style="margin-bottom: 20px; color:#0f172a;">
+    <div style="margin-bottom: 20px; color:#0f172a; font-family:'Plus Jakarta Sans', sans-serif;">
       ${documentPreviewHtml}
 
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px; background:#f8fafc; padding:12px; border-radius:8px;">
+      <!-- HEADER FIELDS GRID -->
+      <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:12px; margin-bottom:16px; background:#f8fafc; padding:14px; border-radius:10px; border:1px solid #e2e8f0;">
         <div>
-          <span style="color:#64748b; font-size:11px; text-transform:uppercase;">VENDOR NAME & EMAIL</span>
-          <div style="font-weight:700; font-size:14px; color:#0f172a;">${inv.vendor}</div>
-          <div style="font-size:12px; color:#64748b;">${inv.vendorEmail}</div>
+          <span style="color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase;">VENDOR NAME</span>
+          <div style="font-weight:700; font-size:14px; color:#0f172a;">${inv.vendor || 'N/A'}</div>
+          <div style="font-size:12px; color:#64748b;">${inv.vendorEmail || 'N/A'}</div>
         </div>
         <div>
-          <span style="color:#64748b; font-size:11px; text-transform:uppercase;">FILE FORMAT & INPUT</span>
-          <div><code class="badge-source">${inv.fileType ? inv.fileType.toUpperCase() : inv.inputType}</code></div>
-          <div style="font-size:12px; color:#64748b; margin-top:2px;">File: ${inv.filename || 'N/A'}</div>
+          <span style="color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase;">INVOICE NUMBER</span>
+          <div style="font-weight:700; font-size:14px; color:#4338ca;">${inv.invoiceNumber || 'N/A'}</div>
+          <div style="font-size:11px; color:#94a3b8;">System ID: ${inv.id}</div>
         </div>
         <div>
-          <span style="color:#64748b; font-size:11px; text-transform:uppercase;">INVOICE DATE</span>
-          <div style="font-weight:600;">${inv.date}</div>
+          <span style="color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase;">INVOICE & DUE DATE</span>
+          <div style="font-weight:600; font-size:13px;">Date: ${inv.date || 'N/A'}</div>
+          <div style="font-size:12px; color:#64748b;">Due: ${inv.dueDate || 'N/A'}</div>
         </div>
         <div>
-          <span style="color:#64748b; font-size:11px; text-transform:uppercase;">SUBMITTED BY USER</span>
-          <div style="font-weight:600; color:#4338ca;">${inv.createdBy || 'AP Clerk'}</div>
+          <span style="color:#64748b; font-size:11px; font-weight:700; text-transform:uppercase;">PO & CURRENCY</span>
+          <div style="font-weight:600; font-size:13px;">PO: <strong>${inv.poNumber || 'N/A'}</strong></div>
+          <div style="font-size:12px; color:#64748b;">Currency: <strong>${inv.currency || 'USD'}</strong> ${inv.paymentTerms ? `(${inv.paymentTerms})` : ''}</div>
+        </div>
+      </div>
+
+      <!-- ARITHMETIC VALIDATION CARD -->
+      <div style="margin-bottom:16px; padding:12px 16px; background:${valBadgeBg}; border:1px solid ${valBadgeColor}; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span style="font-size:11px; font-weight:800; color:${valBadgeColor}; text-transform:uppercase; letter-spacing:0.5px;">ARITHMETIC VALIDATION RESULT</span>
+          <div style="font-size:13px; font-weight:700; color:#0f172a; margin-top:2px;">
+            Status: <span style="color:${valBadgeColor}; font-weight:800;">${val.status || 'VALID'}</span> 
+            ${val.errors && val.errors.length > 0 ? `– ${val.errors[0]}` : '– Extracted line items and totals match invoice arithmetic.'}
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <span style="font-size:11px; color:#64748b; font-weight:700;">CONFIDENCE SCORE</span>
+          <div style="font-size:20px; font-weight:800; color:${inv.confidenceScore >= 0.9 ? '#10b981' : '#f59e0b'};">
+            ${((inv.confidenceScore || 0) * (inv.confidenceScore <= 1 ? 100 : 1)).toFixed(0)}%
+          </div>
         </div>
       </div>
 
@@ -1284,28 +1321,49 @@ function inspectInvoice(id) {
         </div>
       ` : ''}
 
-      <h4 style="color:#0f172a; margin:16px 0 8px;">Extracted Line Items</h4>
-      <table style="width:100%; border:1px solid #e2e8f0; border-radius:8px;">
-        <thead>
-          <tr>
-            <th>Description</th>
-            <th>Qty</th>
-            <th>Unit Price</th>
-            <th>Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${lineItemsHtml}
-        </tbody>
-      </table>
-
-      <div style="margin-top:16px; padding:12px; background:#f8fafc; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-        <div>Subtotal: <strong>$${(inv.subtotal || 0).toFixed(2)}</strong> | Tax: <strong>$${(inv.tax || 0).toFixed(2)}</strong></div>
-        <div style="font-size:18px; color:#059669;">Grand Total: <strong>$${(inv.total || 0).toFixed(2)}</strong></div>
+      <!-- EXTRACTED LINE ITEMS TABLE -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin:16px 0 8px;">
+        <h4 style="color:#0f172a; margin:0; font-size:15px; font-weight:700;">Extracted Line Items (${itemsList.length} items)</h4>
+        <span style="font-size:12px; color:#64748b;">Table layout extracted across ${ext.pageCount || 1} page(s)</span>
       </div>
 
-      <div style="margin-top:16px; display:flex; justify-content:flex-end;">
-        <button class="btn sm secondary" onclick="downloadInvoiceFile('${inv.id}')">📥 Download Original File</button>
+      <div style="max-height: 280px; overflow-y: auto; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:16px;">
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+          <thead style="position:sticky; top:0; background:#f1f5f9; color:#475569; text-transform:uppercase; font-size:10px; font-weight:700;">
+            <tr>
+              <th style="padding:8px; text-align:center; width:35px;">#</th>
+              <th style="padding:8px; text-align:left;">Description</th>
+              <th style="padding:8px; text-align:center; width:50px;">Qty</th>
+              <th style="padding:8px; text-align:right; width:90px;">Unit Price</th>
+              <th style="padding:8px; text-align:center; width:65px;">Discount</th>
+              <th style="padding:8px; text-align:right; width:100px;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${lineItemsHtml}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- FINANCIAL TOTALS SUMMARY -->
+      <div style="padding:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:center;">
+        <div style="font-size:12px; color:#64748b; line-height:1.6;">
+          <div>Extraction Method: <strong>${ext.method || 'PDF_TEXT'}</strong> (OCR Used: <strong>${ext.ocrUsed ? 'Yes' : 'No'}</strong>)</div>
+          <div>Raw Text Length: <strong>${ext.rawTextLength || (inv.rawText ? inv.rawText.length : 'N/A')} chars</strong> | Pages: <strong>${ext.pageCount || 1}</strong></div>
+        </div>
+        <div style="text-align:right; font-size:13px; line-height:1.8;">
+          <div>Subtotal: <strong>$${(inv.subtotal || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></div>
+          <div>Sales Tax: <strong>$${(inv.tax || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></div>
+          <div>Shipping & Handling: <strong>$${(inv.shipping || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</strong></div>
+          <div style="font-size:18px; font-weight:800; color:#059669; margin-top:4px; border-top:1px solid #cbd5e1; padding-top:4px;">
+            Total Due: <strong>$${(inv.total || 0).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})} ${inv.currency || 'USD'}</strong>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px; display:flex; justify-content:space-between; align-items:center;">
+        <button class="btn sm ghost" onclick="inspectLogs('${inv.id}')">📜 View Audit & Engine Logs</button>
+        <button class="btn sm secondary" onclick="downloadInvoiceFile('${inv.id}')">📥 Download Original PDF</button>
       </div>
     </div>
   `;
@@ -1348,3 +1406,45 @@ ${(inv.processingLogs || []).join('\n')}
 function closeModal() {
   document.getElementById('invoiceModal').classList.remove('active');
 }
+
+async function triggerModelTraining() {
+  const btn = document.getElementById('btnTrainModel');
+  const badge = document.getElementById('modelStatusBadge');
+  
+  try {
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = '⏳ Training ML Model...';
+    }
+    appendLog('[MODEL_TRAINER] Initiating high-accuracy AI pattern weight calibration & corpus training...');
+
+    const userEmail = currentUser ? currentUser.email : 'admin@invoice.com';
+    const res = await fetch('/api/train', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-User-Email': userEmail
+      }
+    });
+
+    const data = await res.json();
+    if (data.success && data.model) {
+      if (badge) {
+        badge.textContent = `Model v${data.model.version} Active (${(data.model.accuracyScore * 100).toFixed(1)}% Accuracy)`;
+      }
+      appendLog(`[MODEL_TRAINER] Retraining successful! High-Accuracy Model v${data.model.version} calibrated.`);
+      alert(`AI Extraction Model retrained successfully!\n\nVersion: v${data.model.version}\nAccuracy Score: ${(data.model.accuracyScore * 100).toFixed(1)}%\nCorpus Samples: ${data.model.sampleCount}`);
+    } else {
+      alert(`Model training error: ${data.message || 'Server error'}`);
+    }
+  } catch (err) {
+    console.error("Training request failed:", err);
+    alert(`Model training error: ${err.message}`);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '⚡ Retrain AI Model Now';
+    }
+  }
+}
+
