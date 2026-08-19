@@ -1,119 +1,97 @@
-function normalizeInvoice(rawResult, fileType) {
-  const errors = [];
-  const warnings = [];
-  
-  // 1. Line Items and Totals Math Validation
-  const lineItems = rawResult.lineItems || [];
-  const calculatedLineSubtotal = Math.round(lineItems.reduce((sum, item) => sum + (item.amount || item.total || 0), 0) * 100) / 100;
-  
-  const extractedSubtotal = rawResult.subtotal !== undefined ? rawResult.subtotal : 0;
-  const extractedTax = rawResult.tax !== undefined ? rawResult.tax : 0;
-  const extractedShipping = rawResult.shipping !== undefined ? rawResult.shipping : 0;
-  const extractedTotal = rawResult.total !== undefined ? rawResult.total : 0;
-  
-  let subtotalMatch = true;
-  let taxMatch = true;
-  let shippingMatch = true;
-  let totalMatch = true;
-  
-  // Rounding tolerance of 0.015 (incorporating floating-point precision)
-  if (lineItems.length > 0) {
-    const subtotalDiff = Math.abs(calculatedLineSubtotal - extractedSubtotal);
-    if (subtotalDiff > 0.015) {
-      subtotalMatch = false;
-      warnings.push(`Subtotal mismatch: line items sum is ${calculatedLineSubtotal.toFixed(2)}, extracted subtotal is ${extractedSubtotal.toFixed(2)}`);
-    }
-  }
-  
-  const expectedTotal = Math.round((extractedSubtotal + extractedTax + extractedShipping) * 100) / 100;
-  const totalDiff = Math.abs(expectedTotal - extractedTotal);
-  if (totalDiff > 0.015) {
-    totalMatch = false;
-    warnings.push(`Total mismatch: subtotal + tax + shipping is ${expectedTotal.toFixed(2)}, extracted total is ${extractedTotal.toFixed(2)}`);
-  }
-  
-  // Verification check for each line item amount
-  lineItems.forEach((item, idx) => {
-    const qty = item.quantity || 0;
-    const price = item.unitPrice || 0;
-    const disc = item.discountPercent || 0;
-    const expectedAmt = Math.round(qty * price * (1 - disc / 100.0) * 100) / 100;
-    const diff = Math.abs(expectedAmt - item.amount);
-    if (diff > 0.015) {
-      warnings.push(`Line item #${item.lineNumber || idx+1} amount mismatch: calculated ${expectedAmt.toFixed(2)} vs extracted ${item.amount.toFixed(2)}`);
-    }
-  });
+const {
+  evaluateInvoiceValidation,
+  evaluateDatasetValidation,
+  REASON_CODES,
+  SEVERITY,
+  createValidationResult
+} = require('./flagReasonEngine');
 
-  // Missing fields warnings
-  let isMissingCritical = false;
-  if (!rawResult.invoiceNumber) {
-    warnings.push("Invoice number not found");
-    isMissingCritical = true;
+function normalizeInvoice(rawResult, fileType, options = {}) {
+  const docType = rawResult.documentType || (options.isDataset ? 'DATASET' : 'INVOICE');
+
+  if (docType === 'DATASET') {
+    const evalRes = evaluateDatasetValidation(rawResult, options);
+
+    return {
+      id: rawResult.id,
+      documentType: 'DATASET',
+      invoiceNumber: rawResult.filename || `DS-${Date.now().toString().slice(-4)}`,
+      filename: rawResult.filename || 'dataset.csv',
+      vendor: 'Tabular Dataset',
+      vendorEmail: '',
+      date: new Date().toISOString().split('T')[0],
+      dueDate: '',
+      currency: 'N/A',
+      poNumber: '',
+      paymentTerms: '',
+      subtotal: 0,
+      tax: 0,
+      shipping: 0,
+      total: 0,
+      status: evalRes.status,
+      confidenceScore: evalRes.confidenceScore,
+      dataQualityScore: evalRes.dataQualityScore,
+      threshold: evalRes.threshold,
+      score: evalRes.score,
+      decisionReason: evalRes.decisionReason,
+      recommendedAction: evalRes.recommendedAction,
+      flagReasons: evalRes.flagReasons,
+      validationResults: evalRes.validationResults,
+      scoreBreakdown: evalRes.scoreBreakdown,
+      lineItems: rawResult.lineItems || [],
+      extraction: {
+        fileType: fileType,
+        method: (rawResult.extraction && rawResult.extraction.method) || 'CSV',
+        sheetName: (rawResult.extraction && rawResult.extraction.sheetName) || null,
+        rowCount: rawResult.rowCount || (rawResult.rows ? rawResult.rows.length : null),
+        columnCount: rawResult.columnCount || (rawResult.headers ? rawResult.headers.length : null),
+        ocrUsed: false,
+        pageCount: 1,
+        rawTextAvailable: false,
+        rawTextLength: 0,
+        lineItemCount: 0,
+        warnings: (rawResult.extraction && rawResult.extraction.warnings) || []
+      },
+      validation: {
+        status: evalRes.status,
+        errors: evalRes.flagReasons.map(f => f.message),
+        warnings: []
+      },
+      processingLogs: rawResult.processingLogs || [],
+      rawText: rawResult.rawText || ''
+    };
   }
-  if (!rawResult.vendor || rawResult.vendor === 'Unknown Vendor') {
-    warnings.push("Vendor not found");
-    isMissingCritical = true;
-  }
-  if (!rawResult.date) {
-    warnings.push("Invoice date not found");
-  }
-  if (!rawResult.dueDate) {
-    warnings.push("Due date not found");
-  }
-  
-  // Status resolution
+
+  // Else INVOICE classification
+  const evalRes = evaluateInvoiceValidation(rawResult, options);
+
+  const errors = evalRes.flagReasons.map(f => f.message);
+  const warnings = evalRes.validationResults.filter(v => v.status === 'WARNING').map(v => v.message);
+
+  let subtotalMatch = !evalRes.flagReasons.some(f => f.reasonCode === REASON_CODES.SUBTOTAL_MISMATCH);
+  let totalMatch = !evalRes.flagReasons.some(f => f.reasonCode === REASON_CODES.TOTAL_MISMATCH);
+
   let validationStatus = 'VALID';
-  if (rawResult.extraction && rawResult.extraction.method === 'EXTRACTION_FAILED') {
+  if (evalRes.flagReasons.some(f => f.severity === SEVERITY.CRITICAL)) {
     validationStatus = 'FAILED';
-    errors.push(rawResult.extraction.warnings[0] || 'Extraction failed');
-  } else if (!subtotalMatch || !totalMatch) {
-    validationStatus = 'WARNING';
-  } else if (isMissingCritical || lineItems.length === 0) {
+  } else if (!rawResult.vendor || rawResult.vendor === 'Unknown Vendor' || !rawResult.invoiceNumber || (rawResult.lineItems || []).length === 0) {
     validationStatus = 'PARTIAL';
-  }
-  
-  if (rawResult.extraction && rawResult.extraction.warnings && rawResult.extraction.warnings.length > 0) {
-    const criticalError = rawResult.extraction.warnings.some(w => 
-      w.includes("could not be opened") || 
-      w.includes("could not be determined") ||
-      w.includes("header not found")
-    );
-    if (criticalError) {
-      validationStatus = 'FAILED';
-      errors.push(...rawResult.extraction.warnings);
-    }
+  } else if (evalRes.status === 'FLAGGED' || evalRes.flagReasons.length > 0) {
+    validationStatus = 'WARNING';
   }
 
-  // Confidence calculations
-  let vendorScore = (rawResult.vendor && rawResult.vendor !== 'Unknown Vendor') ? 100 : 0;
-  let invNumScore = rawResult.invoiceNumber ? 100 : 0;
-  let dateScore = rawResult.date ? 100 : 0;
-  let dueDateScore = rawResult.dueDate ? 100 : 0;
-  let lineItemsScore = lineItems.length > 0 ? 100 : 0;
-  let totalsScore = (subtotalMatch && totalMatch && extractedTotal > 0) ? 100 : 50;
-
-  let scorePoints = 0;
-  if (vendorScore === 100) scorePoints += 10;
-  if (invNumScore === 100) scorePoints += 10;
-  if (dateScore === 100) scorePoints += 5;
-  if (dueDateScore === 100) scorePoints += 5;
-  if (lineItemsScore === 100) scorePoints += 30;
-  if (validationStatus === 'VALID') scorePoints += 15;
-  if (subtotalMatch) scorePoints += 10;
-  if (taxMatch) scorePoints += 5;
-  if (totalMatch) scorePoints += 10;
-
-  const confidenceScore = scorePoints / 100.0;
-  
-  let dbStatus = 'PENDING';
-  if (validationStatus === 'FAILED') {
-    dbStatus = 'EXTRACTION_FAILED';
-  } else if (validationStatus === 'WARNING' || validationStatus === 'PARTIAL' || confidenceScore < 0.85) {
-    dbStatus = 'FLAGGED';
+  if (!rawResult.invoiceNumber && !warnings.includes("Invoice number not found")) {
+    warnings.push("Invoice number not found");
+  }
+  if ((!rawResult.vendor || rawResult.vendor === 'Unknown Vendor') && !warnings.includes("Vendor not found")) {
+    warnings.push("Vendor not found");
   }
 
   return {
-    invoiceNumber: (rawResult.invoiceNumber && rawResult.invoiceNumber.trim().length > 0) ? rawResult.invoiceNumber.trim() : `INV-UNPARSED-${Date.now().toString().slice(-4)}`,
+    documentType: 'INVOICE',
+    invoiceNumber: (rawResult.invoiceNumber && rawResult.invoiceNumber.trim().length > 0)
+      ? rawResult.invoiceNumber.trim()
+      : `INV-UNPARSED-${Date.now().toString().slice(-4)}`,
     vendor: rawResult.vendor || 'Unknown Vendor',
     vendorEmail: rawResult.vendorEmail || '',
     date: rawResult.date || '',
@@ -121,39 +99,50 @@ function normalizeInvoice(rawResult, fileType) {
     currency: rawResult.currency || 'USD',
     poNumber: rawResult.poNumber || '',
     paymentTerms: rawResult.paymentTerms || '',
-    subtotal: extractedSubtotal,
-    tax: extractedTax,
-    shipping: extractedShipping,
-    total: extractedTotal,
-    status: dbStatus,
-    confidenceScore,
-    fieldConfidence: {
-      vendor: vendorScore,
-      invoiceNumber: invNumScore,
-      date: dateScore,
-      dueDate: dueDateScore,
-      lineItems: lineItemsScore,
-      totals: totalsScore
+    subtotal: typeof rawResult.subtotal === 'number' ? rawResult.subtotal : 0,
+    tax: typeof rawResult.tax === 'number' ? rawResult.tax : 0,
+    shipping: typeof rawResult.shipping === 'number' ? rawResult.shipping : 0,
+    total: typeof rawResult.total === 'number' ? rawResult.total : 0,
+    status: evalRes.status,
+    confidenceScore: evalRes.confidenceScore / 100.0,
+    threshold: evalRes.threshold,
+    score: {
+      type: 'CONFIDENCE',
+      value: evalRes.confidenceScore,
+      threshold: evalRes.threshold
     },
-    lineItems,
+    decisionReason: evalRes.decisionReason,
+    recommendedAction: evalRes.recommendedAction,
+    flagReasons: evalRes.flagReasons,
+    validationResults: evalRes.validationResults,
+    scoreBreakdown: evalRes.scoreBreakdown,
+    fieldConfidence: {
+      vendor: (rawResult.vendor && rawResult.vendor !== 'Unknown Vendor') ? 100 : 0,
+      invoiceNumber: rawResult.invoiceNumber ? 100 : 0,
+      date: rawResult.date ? 100 : 0,
+      dueDate: rawResult.dueDate ? 100 : 0,
+      lineItems: (rawResult.lineItems && rawResult.lineItems.length > 0) ? 100 : 0,
+      totals: (subtotalMatch && totalMatch) ? 100 : 50
+    },
+    lineItems: rawResult.lineItems || [],
     extraction: {
       fileType: fileType,
-      method: rawResult.extraction.method,
-      sheetName: rawResult.extraction.sheetName || null,
-      rowCount: rawResult.extraction.rowCount || null,
-      columnCount: rawResult.extraction.columnCount || null,
-      ocrUsed: rawResult.extraction.ocrUsed || false,
-      pageCount: rawResult.extraction.pageCount || 1,
-      rawTextAvailable: rawResult.extraction.rawTextAvailable || false,
-      rawTextLength: rawResult.extraction.rawTextLength || 0,
-      lineItemCount: lineItems.length,
-      warnings: rawResult.extraction.warnings || []
+      method: (rawResult.extraction && rawResult.extraction.method) || 'PDF_TEXT',
+      sheetName: (rawResult.extraction && rawResult.extraction.sheetName) || null,
+      rowCount: (rawResult.extraction && rawResult.extraction.rowCount) || null,
+      columnCount: (rawResult.extraction && rawResult.extraction.columnCount) || null,
+      ocrUsed: (rawResult.extraction && rawResult.extraction.ocrUsed) || false,
+      pageCount: (rawResult.extraction && rawResult.extraction.pageCount) || 1,
+      rawTextAvailable: (rawResult.extraction && rawResult.extraction.rawTextAvailable) || false,
+      rawTextLength: (rawResult.extraction && rawResult.extraction.rawTextLength) || 0,
+      lineItemCount: (rawResult.lineItems || []).length,
+      warnings: (rawResult.extraction && rawResult.extraction.warnings) || []
     },
     validation: {
       status: validationStatus,
       subtotalMatch,
-      taxMatch,
-      shippingMatch,
+      taxMatch: true,
+      shippingMatch: true,
       totalMatch,
       errors,
       warnings

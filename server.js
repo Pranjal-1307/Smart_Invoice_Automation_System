@@ -222,6 +222,7 @@ async function runProcessingEngine(inputData) {
     const invoiceObj = {
       id: `INV-${Date.now()}-${Math.floor(100 + Math.random() * 900)}`,
       invoiceNumber: (extracted.invoiceNumber && extracted.invoiceNumber.trim().length > 0) ? extracted.invoiceNumber.trim() : `INV-UNPARSED-${Date.now().toString().slice(-4)}`,
+      documentType: extracted.documentType || (isDataset ? 'DATASET' : 'INVOICE'),
       inputType: resolvedInputType,
       filename: batchFileName,
       vendor: extracted.vendor,
@@ -237,6 +238,18 @@ async function runProcessingEngine(inputData) {
       total: extracted.total,
       status: extracted.status,
       confidenceScore: extracted.confidenceScore,
+      dataQualityScore: extracted.dataQualityScore,
+      threshold: extracted.threshold || 85,
+      score: extracted.score || {
+        type: isDataset ? 'QUALITY' : 'CONFIDENCE',
+        value: typeof extracted.confidenceScore === 'number' ? (extracted.confidenceScore <= 1 ? Math.round(extracted.confidenceScore * 100) : extracted.confidenceScore) : 0,
+        threshold: extracted.threshold || 85
+      },
+      decisionReason: extracted.decisionReason || '',
+      recommendedAction: extracted.recommendedAction || '',
+      flagReasons: extracted.flagReasons || [],
+      validationResults: extracted.validationResults || [],
+      scoreBreakdown: extracted.scoreBreakdown || [],
       fieldConfidence: extracted.fieldConfidence,
       lineItems: extracted.lineItems,
       extraction: extracted.extraction,
@@ -421,6 +434,49 @@ app.get('/api/invoices', async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+});
+
+// GET document details with structured validation and flag reason explanation
+app.get('/api/invoices/:id', async (req, res) => {
+  try {
+    const inv = await Invoice.findOne({ id: req.params.id }) || await Invoice.findById(req.params.id);
+    if (!inv) {
+      return res.status(404).json({ success: false, message: "Document not found" });
+    }
+
+    const docType = inv.documentType || (inv.inputType === 'DATASET_CSV' ? 'DATASET' : 'INVOICE');
+    const confVal = typeof inv.confidenceScore === 'number' 
+      ? (inv.confidenceScore <= 1 ? Math.round(inv.confidenceScore * 100) : inv.confidenceScore) 
+      : 0;
+
+    const formattedScore = inv.score && inv.score.value !== undefined ? inv.score : {
+      type: docType === 'DATASET' ? 'QUALITY' : 'CONFIDENCE',
+      value: docType === 'DATASET' ? (inv.dataQualityScore || confVal) : confVal,
+      threshold: inv.threshold || (docType === 'DATASET' ? 80 : 85)
+    };
+
+    res.json({
+      success: true,
+      documentId: inv.id,
+      invoiceNumber: inv.invoiceNumber,
+      documentType: docType,
+      status: inv.status,
+      score: formattedScore,
+      decisionReason: inv.decisionReason || `Status is ${inv.status}.`,
+      recommendedAction: inv.recommendedAction || 'No specific action recommended.',
+      flagReasons: inv.flagReasons || [],
+      validationResults: inv.validationResults || [],
+      scoreBreakdown: inv.scoreBreakdown || [],
+      document: inv
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+app.get('/api/documents/:id', async (req, res) => {
+  req.url = `/api/invoices/${req.params.id}`;
+  return app._router.handle(req, res);
 });
 
 app.get('/api/stats', async (req, res) => {

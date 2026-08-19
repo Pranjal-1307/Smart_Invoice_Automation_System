@@ -2,6 +2,7 @@ const { extractPdf, extractTextFromPdfDataUrl } = require('./extractors/pdfExtra
 const { extractExcel } = require('./extractors/excelExtractor');
 const { extractCsv } = require('./extractors/csvExtractor');
 const { normalizeInvoice } = require('./extractors/invoiceNormalizer');
+const { REASON_CODES, SEVERITY, createValidationResult } = require('./extractors/flagReasonEngine');
 
 function detectFileType(payload, filename = '') {
   const fileStr = typeof payload === 'string' ? payload : '';
@@ -67,7 +68,9 @@ async function extractDocumentDetails(fileContentPayload, filename = '', customM
     }
     
     // Normalize the result
-    const normalized = normalizeInvoice(rawResult, fileType);
+    const normalized = normalizeInvoice(rawResult, fileType, {
+      isDataset: customFields.isDataset || (rawResult && rawResult.documentType === 'DATASET')
+    });
     
     // Merge processing logs
     normalized.processingLogs = [
@@ -85,9 +88,25 @@ async function extractDocumentDetails(fileContentPayload, filename = '', customM
     ];
     
     const fallbackType = filename.toLowerCase().endsWith('.csv') ? 'CSV' : (filename.toLowerCase().endsWith('.xlsx') || filename.toLowerCase().endsWith('.xls') ? 'XLSX' : 'PDF');
-    
+    const isDatasetFile = fallbackType === 'CSV' || fallbackType === 'XLSX';
+
+    const failReason = createValidationResult({
+      field: 'file',
+      validation: 'FILE_PARSING',
+      status: 'FAILED',
+      severity: SEVERITY.CRITICAL,
+      reasonCode: fallbackType === 'PDF' ? REASON_CODES.UNREADABLE_PDF : REASON_CODES.FILE_PARSE_FAILED,
+      message: `Document processing failed: ${err.message}`,
+      expected: 'Valid parseable file stream',
+      actual: 'File parse exception',
+      confidenceImpact: -100,
+      qualityImpact: -100
+    });
+
     return {
+      documentType: isDatasetFile ? 'DATASET' : 'INVOICE',
       invoiceNumber: `INV-UNPARSED-${Date.now().toString().slice(-4)}`,
+      filename: filename || 'unparsed_file',
       vendor: 'Unknown Vendor',
       vendorEmail: '',
       date: '',
@@ -99,8 +118,28 @@ async function extractDocumentDetails(fileContentPayload, filename = '', customM
       tax: 0,
       shipping: 0,
       total: 0,
-      status: 'EXTRACTION_FAILED',
+      status: 'FLAGGED',
       confidenceScore: 0,
+      dataQualityScore: 0,
+      threshold: 85,
+      score: {
+        type: isDatasetFile ? 'QUALITY' : 'CONFIDENCE',
+        value: 0,
+        threshold: 85
+      },
+      decisionReason: `Processing failed: ${err.message}`,
+      recommendedAction: 'Verify that the uploaded file is not corrupted or password-protected and upload a valid PDF/CSV/Excel document.',
+      flagReasons: [failReason],
+      validationResults: [failReason],
+      scoreBreakdown: [
+        {
+          factor: 'Document File Parsing',
+          maxScore: 100,
+          earnedScore: 0,
+          status: 'FAILED',
+          reasonCode: failReason.reasonCode
+        }
+      ],
       fieldConfidence: { vendor: 0, invoiceNumber: 0, date: 0, dueDate: 0, lineItems: 0, totals: 0 },
       lineItems: [],
       extraction: {
@@ -117,7 +156,7 @@ async function extractDocumentDetails(fileContentPayload, filename = '', customM
         warnings: [err.message]
       },
       validation: {
-        status: 'EXTRACTION_FAILED',
+        status: 'FAILED',
         subtotalMatch: false,
         taxMatch: false,
         shippingMatch: false,

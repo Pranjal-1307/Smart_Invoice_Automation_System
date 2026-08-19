@@ -84,7 +84,7 @@ let currentMgrSubTab = 'all';
 let currentAdminSubTab = 'all';
 
 let API_BASE_URL = '';
-if (window.location.port && window.location.port !== '3000' && window.location.protocol.startsWith('http')) {
+if (window.location.protocol === 'file:' || (window.location.port && window.location.port !== '3000' && window.location.protocol.startsWith('http'))) {
   API_BASE_URL = 'http://localhost:3000';
 }
 
@@ -583,7 +583,16 @@ function filterUserHistory() {
         <td><strong>${inv.vendor}</strong></td>
         <td><strong style="color:#10b981;">$${(inv.total || 0).toFixed(2)}</strong></td>
         <td><span class="confidence-badge" style="color:${inv.confidenceScore >= 0.94 ? '#10b981' : '#f59e0b'}; font-weight:700;">${((inv.confidenceScore || 0) * 100).toFixed(0)}%</span></td>
-        <td><span class="status-badge status-${inv.status.toLowerCase()}">${inv.status}</span></td>
+        <td>
+          <span class="status-badge status-${inv.status.toLowerCase()}">${inv.status}</span>
+          ${(inv.status === 'FLAGGED' || inv.status === 'FLAGGED_FOR_REVIEW' || inv.status === 'EXTRACTION_FAILED' || inv.status === 'ATTENTION_REQUIRED') ? `
+            <div style="margin-top:4px;">
+              <button class="btn xs danger" style="padding:2px 8px; font-weight:800; font-size:11px; border-radius:4px; display:inline-flex; align-items:center; gap:3px;" onclick="viewFlagDetails('${inv.id}')" title="View exact reason why document was flagged">
+                ⚠️ Flag Details
+              </button>
+            </div>
+          ` : ''}
+        </td>
         <td>
           <div>${inv.date || new Date(inv.createdAt).toLocaleDateString()}</div>
           ${inv.notes ? `<div style="font-size:11px; color:#a5b4fc; margin-top:2px;">📝 "${inv.notes}"</div>` : ''}
@@ -591,6 +600,9 @@ function filterUserHistory() {
         <td>
           <div style="display:flex; gap:6px; flex-wrap:nowrap;">
             <button class="btn xs ghost" onclick="inspectInvoice('${inv.id}')" title="View details and document preview">👁️ View</button>
+            ${(inv.status === 'FLAGGED' || inv.status === 'FLAGGED_FOR_REVIEW' || inv.status === 'EXTRACTION_FAILED' || inv.status === 'ATTENTION_REQUIRED') ? `
+              <button class="btn xs danger" onclick="viewFlagDetails('${inv.id}')" title="View Flag Reasons & Validation Explanation">⚠️ Flag Details</button>
+            ` : ''}
             <button class="btn xs secondary" onclick="downloadInvoiceFile('${inv.id}')" title="Download original file">📥 Download</button>
           </div>
         </td>
@@ -689,6 +701,9 @@ function renderApprovalDesk() {
       </div>
 
       <div class="card-actions flex-gap">
+        ${(inv.status === 'FLAGGED' || inv.status === 'FLAGGED_FOR_REVIEW' || inv.status === 'EXTRACTION_FAILED' || inv.status === 'ATTENTION_REQUIRED') ? `
+          <button class="btn sm danger flex-1" onclick="viewFlagDetails('${inv.id}')">⚠️ View Flag Details</button>
+        ` : ''}
         ${inv.status === 'PENDING' ? `
           <button class="btn sm accent flex-1" onclick="approveInvoice('${inv.id}')">✅ Approve</button>
           <button class="btn sm danger flex-1" onclick="rejectInvoice('${inv.id}')">🚫 Reject</button>
@@ -1574,4 +1589,367 @@ async function triggerModelTraining() {
     }
   }
 }
+
+// ============================================================================
+// FLAG DETAILS MODAL & DETAILED CALCULATIONS
+// ============================================================================
+
+async function viewFlagDetails(id) {
+  let inv = currentInvoices.find(i => i.id === id || i._id === id);
+
+  try {
+    const res = await fetch(`/api/invoices/${id}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.document) {
+        inv = data.document;
+      }
+    }
+  } catch (e) {
+    console.warn("Could not fetch latest document details from API:", e);
+  }
+
+  if (!inv) return;
+
+  const flagModal = document.getElementById('flagDetailsModal');
+  const flagModalTitle = document.getElementById('flagModalTitle');
+  const flagModalSub = document.getElementById('flagModalSub');
+  const flagModalBody = document.getElementById('flagModalBody');
+
+  const docType = inv.documentType || (inv.inputType === 'DATASET_CSV' ? 'DATASET' : 'INVOICE');
+  const isDataset = docType === 'DATASET';
+
+  flagModalTitle.textContent = isDataset ? '⚠️ DATASET FLAGGED - Calculation & Quality Explanation' : '⚠️ FILE FLAGGED - Calculation & Validation Errors';
+  flagModalSub.textContent = `Document ID: ${inv.id} | Filename: ${inv.filename || 'Uploaded File'} | Classification: [${docType}]`;
+
+  const flagReasons = inv.flagReasons || [];
+  const validationResults = inv.validationResults || [];
+  const scoreBreakdown = inv.scoreBreakdown || [];
+  const currency = inv.currency || 'USD';
+
+  // Helper for formatting currency values vs percentage / count values
+  const getSym = (c) => {
+    const u = String(c || 'USD').toUpperCase();
+    if (u.includes('EUR') || u === '€') return '€';
+    if (u.includes('GBP') || u === '£') return '£';
+    if (u.includes('INR') || u === '₹') return '₹';
+    return '$';
+  };
+  const sym = getSym(currency);
+
+  const formatVal = (val, code = '') => {
+    if (val === null || val === undefined) return 'N/A';
+    if (typeof val === 'number') {
+      if (code.includes('BELOW_THRESHOLD') || code.includes('SCORE') || code.includes('RATIO')) {
+        return `${val}%`;
+      }
+      return `${sym}${val.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return val;
+  };
+
+  const rawScoreVal = isDataset ? (inv.dataQualityScore !== undefined ? inv.dataQualityScore : inv.confidenceScore) : inv.confidenceScore;
+  const scoreVal = typeof rawScoreVal === 'number' ? (rawScoreVal <= 1 ? Math.round(rawScoreVal * 100) : rawScoreVal) : 0;
+  const threshold = inv.threshold || (isDataset ? 80 : 85);
+  const scoreDiff = Math.abs(threshold - scoreVal);
+
+  const scoreTypeLabel = isDataset ? 'Data Quality Score' : 'Confidence Score';
+  const scoreBadgeColor = scoreVal >= threshold ? '#10b981' : '#ef4444';
+
+  // Filter calculation & value mismatch errors
+  const calcMismatchCodes = [
+    'SUBTOTAL_MISMATCH',
+    'TOTAL_MISMATCH',
+    'LINE_ITEM_CALCULATION_MISMATCH',
+    'TAX_CALCULATION_MISMATCH',
+    'INVALID_AMOUNT'
+  ];
+  const calcMismatchReasons = flagReasons.filter(r => calcMismatchCodes.includes(r.reasonCode));
+
+  // Section 1: Simple Explanation Summary Card
+  const summaryExplanationHtml = `
+    <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: 12px; margin-bottom: 20px;">
+      <div style="font-size: 13px; font-weight: 800; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+        <span>🚨</span> Why was this file flagged?
+      </div>
+      <div style="font-size: 14px; color: #7f1d1d; line-height: 1.6; font-weight: 600;">
+        ${inv.decisionReason || `The ${scoreTypeLabel.toLowerCase()} (${scoreVal}%) is below the required minimum threshold of ${threshold}%.`}
+      </div>
+    </div>
+  `;
+
+  // Section 2: Dedicated Calculation & Value Mismatch Errors Showcase
+  let calcErrorBoxHtml = '';
+  if (calcMismatchReasons.length > 0) {
+    const calcCardsHtml = calcMismatchReasons.map((reason, idx) => {
+      let title = 'Calculation Mismatch Error';
+      let mathFormula = '';
+      let explanation = '';
+
+      if (reason.reasonCode === 'SUBTOTAL_MISMATCH') {
+        title = 'Subtotal Calculation Mismatch';
+        const lineSum = reason.expected !== null ? formatVal(reason.expected, reason.reasonCode) : 'N/A';
+        const statedSub = reason.actual !== null ? formatVal(reason.actual, reason.reasonCode) : 'N/A';
+        const diff = reason.difference !== null ? formatVal(reason.difference, reason.reasonCode) : 'N/A';
+        mathFormula = `Calculated Sum of Line Items (${lineSum}) ≠ Stated Subtotal in Document (${statedSub})`;
+        explanation = `The subtotal stated in the file (${statedSub}) does not equal the calculated sum of extracted line items (${lineSum}). Discrepancy amount: ${diff}.`;
+      } else if (reason.reasonCode === 'TOTAL_MISMATCH') {
+        title = 'Grand Total Arithmetic Mismatch';
+        const expTot = reason.expected !== null ? formatVal(reason.expected, reason.reasonCode) : 'N/A';
+        const actTot = reason.actual !== null ? formatVal(reason.actual, reason.reasonCode) : 'N/A';
+        const diff = reason.difference !== null ? formatVal(reason.difference, reason.reasonCode) : 'N/A';
+        const sub = formatVal(inv.subtotal || 0, 'SUBTOTAL');
+        const tax = formatVal(inv.tax || 0, 'TAX');
+        const ship = formatVal(inv.shipping || 0, 'SHIPPING');
+        mathFormula = `Subtotal (${sub}) + Tax (${tax}) + Shipping (${ship}) = Expected ${expTot} ≠ Stated Total (${actTot})`;
+        explanation = `Extracted grand total (${actTot}) does not match the arithmetic sum of Subtotal + Tax + Shipping (${expTot}). Discrepancy amount: ${diff}.`;
+      } else if (reason.reasonCode === 'LINE_ITEM_CALCULATION_MISMATCH') {
+        title = `Line Item / Row Calculation Error (${reason.field || 'Line Item'})`;
+        const expAmt = reason.expected !== null ? formatVal(reason.expected, reason.reasonCode) : 'N/A';
+        const actAmt = reason.actual !== null ? formatVal(reason.actual, reason.reasonCode) : 'N/A';
+        const diff = reason.difference !== null ? formatVal(reason.difference, reason.reasonCode) : 'N/A';
+        mathFormula = `Quantity × Unit Price = Expected ${expAmt} ≠ Stated Amount in File (${actAmt})`;
+        explanation = reason.message || `Line item calculation mismatch. Expected line total is ${expAmt}, but file has ${actAmt} (Discrepancy: ${diff}).`;
+      } else {
+        title = reason.message || 'Value Mismatch Error';
+        mathFormula = `Expected ${formatVal(reason.expected, reason.reasonCode)} ≠ Found ${formatVal(reason.actual, reason.reasonCode)}`;
+        explanation = reason.message || 'Calculation or value mismatch detected.';
+      }
+
+      return `
+        <div style="background: #ffffff; border: 1.5px solid #ef4444; border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; box-shadow: 0 4px 6px -1px rgba(239, 68, 68, 0.1);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-weight: 800; font-size: 14px; color: #b91c1c; display: flex; align-items: center; gap: 6px;">
+              <span>❌</span> Error #${idx + 1}: ${title}
+            </div>
+            <span style="background: #dc2626; color: #ffffff; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 4px; text-transform: uppercase;">
+              ${reason.reasonCode}
+            </span>
+          </div>
+
+          <div style="background: #fef2f2; border-left: 4px solid #dc2626; padding: 10px; border-radius: 4px; margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #991b1b; font-weight: 700;">
+            📐 Math Formula: ${mathFormula}
+          </div>
+
+          <div style="font-size: 12px; color: #475569; margin-bottom: 10px; line-height: 1.4;">
+            ${explanation}
+          </div>
+
+          <!-- Comparison Table for the Calculation Error -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; background: #f8fafc; padding: 10px; border-radius: 8px; border: 1px solid #e2e8f0; font-size: 12px;">
+            <div>
+              <span style="color: #64748b; font-weight: 700; font-size: 11px;">CORRECT / EXPECTED VALUE:</span>
+              <div style="font-weight: 800; color: #059669; font-size: 15px; margin-top: 2px; display: flex; align-items: center; gap: 4px;">
+                <span>✓</span> ${formatVal(reason.expected, reason.reasonCode)}
+              </div>
+            </div>
+            <div>
+              <span style="color: #64748b; font-weight: 700; font-size: 11px;">FOUND IN DOCUMENT:</span>
+              <div style="font-weight: 800; color: #dc2626; font-size: 15px; margin-top: 2px; display: flex; align-items: center; gap: 4px;">
+                <span>✗</span> ${formatVal(reason.actual, reason.reasonCode)}
+              </div>
+            </div>
+            <div>
+              <span style="color: #64748b; font-weight: 700; font-size: 11px;">MISMATCH VARIANCE:</span>
+              <div style="font-weight: 800; color: #b91c1c; font-size: 15px; margin-top: 2px;">
+                ${reason.difference !== null && reason.difference !== undefined ? formatVal(reason.difference, reason.reasonCode) : 'N/A'}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    calcErrorBoxHtml = `
+      <div style="background: #fff5f5; border: 2px solid #fca5a5; border-radius: 12px; padding: 18px; margin-bottom: 20px;">
+        <div style="font-size: 15px; font-weight: 900; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
+          <span>🚨</span> DETECTED CALCULATION & VALUE MISMATCH ERRORS (${calcMismatchReasons.length})
+        </div>
+        ${calcCardsHtml}
+      </div>
+    `;
+  }
+
+  // Section 3: Flag Reasons List
+  let flagReasonsListHtml = '';
+  if (flagReasons.length > 0) {
+    flagReasonsListHtml = flagReasons.map((reason, idx) => {
+      const sev = reason.severity || 'HIGH';
+      const sevBg = sev === 'CRITICAL' ? '#fef2f2' : sev === 'HIGH' ? '#fff7ed' : '#fefce8';
+      const sevBorder = sev === 'CRITICAL' ? '#fca5a5' : sev === 'HIGH' ? '#fdba74' : '#fef08a';
+      const sevTagBg = sev === 'CRITICAL' ? '#ef4444' : sev === 'HIGH' ? '#f97316' : '#eab308';
+
+      const expValStr = formatVal(reason.expected, reason.reasonCode || '');
+      const actValStr = formatVal(reason.actual, reason.reasonCode || '');
+      const diffValStr = reason.difference !== null && reason.difference !== undefined 
+        ? formatVal(reason.difference, reason.reasonCode || '') 
+        : null;
+
+      const impactVal = reason.confidenceImpact || reason.qualityImpact || reason.scoreImpact || 0;
+
+      return `
+        <div style="background: ${sevBg}; border: 1px solid ${sevBorder}; border-radius: 12px; padding: 16px; margin-bottom: 14px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-weight: 800; font-size: 15px; color: #0f172a;">${idx + 1}. ${reason.message || reason.reasonCode}</span>
+            </div>
+            <div style="display: flex; gap: 6px; align-items: center;">
+              <span style="background: ${sevTagBg}; color: #ffffff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 4px;">Severity: ${sev}</span>
+              ${reason.reasonCode ? `<code style="background: #ffffff; color: #475569; border: 1px solid #cbd5e1; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${reason.reasonCode}</code>` : ''}
+            </div>
+          </div>
+
+          <!-- Comparison Grid -->
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; background: #ffffff; padding: 12px; border-radius: 8px; border: 1px solid ${sevBorder}; margin-top: 10px; font-size: 12px;">
+            <div>
+              <span style="color: #64748b; font-weight: 700;">Expected Value:</span>
+              <div style="font-weight: 700; color: #059669; font-size: 14px; margin-top: 2px;">${expValStr}</div>
+            </div>
+            <div>
+              <span style="color: #64748b; font-weight: 700;">Found in Document:</span>
+              <div style="font-weight: 700; color: #dc2626; font-size: 14px; margin-top: 2px;">${actValStr}</div>
+            </div>
+            <div>
+              <span style="color: #64748b; font-weight: 700;">Difference / Impact:</span>
+              <div style="font-weight: 700; color: #b91c1c; font-size: 14px; margin-top: 2px;">
+                ${diffValStr ? `Diff: ${diffValStr}` : ''} ${impactVal ? `(${impactVal > 0 ? '-' : ''}${Math.abs(impactVal)}% score)` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  } else {
+    flagReasonsListHtml = `
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 14px; border-radius: 8px; font-size: 13px; color: #64748b;">
+        No specific critical flag reasons recorded. Document score (${scoreVal}%) is below required threshold (${threshold}%).
+      </div>
+    `;
+  }
+
+  // Section 4: Recommended Action Box
+  const recommendedActionHtml = `
+    <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 14px 18px; border-radius: 12px; margin-bottom: 20px;">
+      <div style="font-size: 12px; font-weight: 800; color: #1e40af; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+        💡 Recommended Action to Resolve Issue
+      </div>
+      <div style="font-size: 13px; color: #1e3a8a; font-weight: 600; margin-top: 4px; line-height: 1.5;">
+        ${inv.recommendedAction || 'Review document extraction details and update fields manually if needed.'}
+      </div>
+    </div>
+  `;
+
+  // Section 5: Score Breakdown Table
+  let scoreBreakdownRows = '';
+  if (scoreBreakdown.length > 0) {
+    scoreBreakdownRows = scoreBreakdown.map(factor => {
+      const isPassed = factor.status === 'PASSED';
+      return `
+        <tr style="border-bottom: 1px solid #f1f5f9; font-size: 12px;">
+          <td style="padding: 8px 10px; font-weight: 600; color: #0f172a;">${factor.factor}</td>
+          <td style="padding: 8px 10px; text-align: center; font-weight: 700; color: ${isPassed ? '#059669' : '#dc2626'};">${factor.earnedScore} / ${factor.maxScore} pts</td>
+          <td style="padding: 8px 10px; text-align: center;">
+            <span style="background: ${isPassed ? '#ecfdf5' : '#fef2f2'}; color: ${isPassed ? '#047857' : '#b91c1c'}; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 4px;">
+              ${isPassed ? '✓ PASSED' : '✗ FAILED'}
+            </span>
+          </td>
+          <td style="padding: 8px 10px; color: #64748b; font-size: 11px;">${factor.reasonCode || 'Normal'}</td>
+        </tr>
+      `;
+    }).join('');
+  } else {
+    scoreBreakdownRows = `<tr><td colspan="4" style="text-align: center; padding: 10px; color: #94a3b8;">No breakdown available</td></tr>`;
+  }
+
+  const scoreCardHtml = `
+    <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 16px; margin-bottom: 20px; background: #f8fafc; padding: 16px; border-radius: 12px; border: 1px solid #e2e8f0;">
+      <div>
+        <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase;">${scoreTypeLabel.toUpperCase()}</div>
+        <div style="font-size: 32px; font-weight: 900; color: ${scoreBadgeColor}; margin: 4px 0;">
+          ${scoreVal}%
+        </div>
+        <div style="font-size: 12px; color: #475569;">Required Minimum: <strong>${threshold}%</strong></div>
+        <div style="font-size: 12px; color: #dc2626; font-weight: 700; margin-top: 2px;">
+          ${scoreVal < threshold ? `Below threshold by ${scoreDiff}%` : 'Meets requirement'}
+        </div>
+      </div>
+      <div>
+        <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 8px;">Evaluation Factor Score Breakdown</div>
+        <div style="max-height: 160px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <thead style="background: #e2e8f0; font-size: 10px; text-transform: uppercase; color: #475569;">
+              <tr>
+                <th style="padding: 6px 10px; text-align: left;">Factor</th>
+                <th style="padding: 6px 10px; text-align: center;">Points</th>
+                <th style="padding: 6px 10px; text-align: center;">Status</th>
+                <th style="padding: 6px 10px; text-align: left;">Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${scoreBreakdownRows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Section 6: Toggleable Technical View
+  const technicalViewHtml = `
+    <div style="margin-top: 20px; border-top: 1px solid #e2e8f0; padding-top: 16px;">
+      <button class="btn sm secondary" onclick="toggleTechnicalDetails()" style="font-size: 12px; font-weight: 700;">
+        🛠️ View Technical Details & RPA Execution Logs
+      </button>
+
+      <div id="technicalDetailsPanel" style="display: none; margin-top: 14px; background: #0f172a; color: #38bdf8; padding: 16px; border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12px; max-height: 320px; overflow-y: auto;">
+        <div style="color: #a7f3d0; font-weight: 700; margin-bottom: 8px; border-bottom: 1px solid #334155; padding-bottom: 4px;">
+          🤖 ROBOT FRAMEWORK WORKFLOW EXECUTION LOGS & CALCULATIONS:
+        </div>
+        <pre style="white-space: pre-wrap; margin: 0; color: #4ade80;">${(inv.processingLogs || []).join('\n')}</pre>
+
+        <div style="color: #cbd5e1; font-weight: 700; margin: 12px 0 6px; border-bottom: 1px solid #334155; padding-bottom: 4px;">
+          📊 STRUCTURED VALIDATION RESULTS JSON:
+        </div>
+        <pre style="white-space: pre-wrap; margin: 0; color: #38bdf8;">${JSON.stringify({
+          documentId: inv.id,
+          documentType: docType,
+          status: inv.status,
+          score: { type: isDataset ? 'QUALITY' : 'CONFIDENCE', value: scoreVal, threshold },
+          decisionReason: inv.decisionReason,
+          flagReasons: inv.flagReasons,
+          validationResults: inv.validationResults,
+          scoreBreakdown: inv.scoreBreakdown,
+          processingTimestamps: { createdAt: inv.createdAt, updatedAt: inv.updatedAt }
+        }, null, 2)}</pre>
+      </div>
+    </div>
+  `;
+
+  flagModalBody.innerHTML = `
+    <div style="font-family: 'Plus Jakarta Sans', sans-serif;">
+      ${summaryExplanationHtml}
+      ${calcErrorBoxHtml}
+      ${scoreCardHtml}
+      <h4 style="font-size: 15px; font-weight: 800; color: #0f172a; margin: 16px 0 10px;">Structured Reason(s) for Flagging</h4>
+      ${flagReasonsListHtml}
+      ${recommendedActionHtml}
+      ${technicalViewHtml}
+    </div>
+  `;
+
+  flagModal.classList.add('active');
+}
+
+function closeFlagModal() {
+  const modal = document.getElementById('flagDetailsModal');
+  if (modal) modal.classList.remove('active');
+}
+
+function toggleTechnicalDetails() {
+  const panel = document.getElementById('technicalDetailsPanel');
+  if (panel) {
+    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  }
+}
+
 

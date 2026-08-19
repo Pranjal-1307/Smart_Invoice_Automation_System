@@ -61,7 +61,6 @@ const extractionSchema = new mongoose.Schema({
 const validationSchema = new mongoose.Schema({
   status: {
     type: String,
-    enum: ['VALID', 'WARNING', 'FAILED', 'PARTIAL', 'EXTRACTION_FAILED'],
     default: 'VALID'
   },
   subtotalMatch: {
@@ -93,6 +92,46 @@ const fieldConfidenceSchema = new mongoose.Schema({
   totals: { type: Number, default: 0 }
 }, { _id: false });
 
+const flagReasonSchema = new mongoose.Schema({
+  reasonCode: String,
+  severity: String,
+  message: String,
+  field: String,
+  expected: mongoose.Schema.Types.Mixed,
+  actual: mongoose.Schema.Types.Mixed,
+  difference: mongoose.Schema.Types.Mixed,
+  scoreImpact: Number,
+  confidenceImpact: Number,
+  qualityImpact: Number,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+}, { _id: false });
+
+const validationResultSchema = new mongoose.Schema({
+  field: String,
+  validation: String,
+  status: String,
+  severity: String,
+  reasonCode: String,
+  message: String,
+  expected: mongoose.Schema.Types.Mixed,
+  actual: mongoose.Schema.Types.Mixed,
+  difference: mongoose.Schema.Types.Mixed,
+  scoreImpact: Number,
+  confidenceImpact: Number,
+  qualityImpact: Number
+}, { _id: false });
+
+const scoreBreakdownSchema = new mongoose.Schema({
+  factor: String,
+  maxScore: Number,
+  earnedScore: Number,
+  status: String,
+  reasonCode: String
+}, { _id: false });
+
 const invoiceSchema = new mongoose.Schema({
   id: {
     type: String,
@@ -102,6 +141,11 @@ const invoiceSchema = new mongoose.Schema({
   invoiceNumber: {
     type: String,
     required: true
+  },
+  documentType: {
+    type: String,
+    enum: ['INVOICE', 'DATASET', 'UNKNOWN'],
+    default: 'INVOICE'
   },
   inputType: {
     type: String,
@@ -128,10 +172,24 @@ const invoiceSchema = new mongoose.Schema({
   total: Number,
   status: {
     type: String,
-    enum: ['PENDING', 'APPROVED', 'REJECTED', 'FLAGGED', 'EXTRACTION_FAILED'],
     default: 'PENDING'
   },
   confidenceScore: Number,
+  dataQualityScore: Number,
+  threshold: Number,
+  score: {
+    type: {
+      type: String,
+      default: 'CONFIDENCE'
+    },
+    value: Number,
+    threshold: Number
+  },
+  decisionReason: String,
+  recommendedAction: String,
+  flagReasons: [flagReasonSchema],
+  validationResults: [validationResultSchema],
+  scoreBreakdown: [scoreBreakdownSchema],
   fieldConfidence: fieldConfidenceSchema,
   lineItems: [lineItemSchema],
   extraction: extractionSchema,
@@ -166,4 +224,3 @@ const invoiceSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('Invoice', invoiceSchema);
-
