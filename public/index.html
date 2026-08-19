@@ -233,6 +233,8 @@
         </div>
       </div>
 
+
+
       <!-- ================================================================= -->
       <!-- 1: USER DASHBOARD -->
       <!-- ================================================================= -->
@@ -653,10 +655,131 @@
 
         <!-- Admin Sub-section 2: Flow Check & Processing Engine -->
         <div id="adminSubSectionEngine" class="admin-sub-section">
+          <!-- 🤖 MAIN HERO SECTION: ROBOT FRAMEWORK RPA SYSTEM HERO -->
+          <div class="hero-rpa-header-card">
+            <div class="hero-rpa-badge">🤖 MAIN AUTOMATION ENGINE</div>
+            <h1 class="hero-rpa-title">🤖 SMART INVOICE AUTOMATION SYSTEM</h1>
+            <h2 class="hero-rpa-subtitle">Powered by Robot Framework</h2>
+            <p class="hero-rpa-description">
+              Automating Invoice and Dataset Processing from Upload to Validation, Storage, and Reporting
+            </p>
+
+            <!-- Interactive Workflow Visualizer Diagram -->
+            <div class="hero-workflow-container">
+              <div class="hero-wf-flow">
+                <div class="wf-node-box">
+                  <span>📥</span> <span>UPLOAD</span>
+                </div>
+                <div class="wf-arrow-down">↓</div>
+                <div class="wf-node-box hero-node">
+                  <span>🤖</span> <span>RPA AUTOMATION ENGINE (Robot Framework)</span>
+                </div>
+                <div class="wf-arrow-down">↓</div>
+                <div class="wf-node-box">
+                  <span>🔍</span> <span>DOCUMENT CLASSIFICATION</span>
+                </div>
+                <div class="wf-arrow-down">↓</div>
+
+                <div class="wf-branches-grid">
+                  <!-- Invoice Robot Branch -->
+                  <div class="wf-branch-card invoice-branch">
+                    <div class="wf-branch-head">
+                      <span style="color:#818cf8;">🧾 INVOICE WORKFLOW</span>
+                      <span class="pill-mini" style="background:#4338ca; color:#ffffff;">Robot Engine</span>
+                    </div>
+                    <div class="wf-branch-step">🧠 AI Invoice Pattern Extraction</div>
+                    <div class="wf-branch-step">🛡️ Field & Arithmetic Validation</div>
+                    <div class="wf-branch-step" style="color:#4ade80; font-weight:700;">🎯 Confidence Score Calculation</div>
+                  </div>
+
+                  <!-- Dataset Robot Branch -->
+                  <div class="wf-branch-card dataset-branch">
+                    <div class="wf-branch-head">
+                      <span style="color:#34d399;">📊 DATASET WORKFLOW</span>
+                      <span class="pill-mini" style="background:#065f46; color:#ffffff;">Robot Engine</span>
+                    </div>
+                    <div class="wf-branch-step">📈 Tabular Header & Column Detection</div>
+                    <div class="wf-branch-step">🔍 Structure & Missing Value Validation</div>
+                    <div class="wf-branch-step" style="color:#6ee7b7; font-weight:700;">📊 Data Quality Score Calculation</div>
+                  </div>
+                </div>
+
+                <div class="wf-arrow-down">↓</div>
+                <div class="wf-node-box">
+                  <span>🍃</span> <span>MONGODB DATABASE PERSISTENCE</span>
+                </div>
+                <div class="wf-arrow-down">↓</div>
+                <div class="wf-node-box">
+                  <span>📊</span> <span>DASHBOARD & ANALYTICS REPORTS</span>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="engine-dashboard" style="margin-top: 32px;">
-            <div class="admin-controls-card">
+            
+            <!-- Robot Framework RPA Automation Engine Hero Card -->
+            <div class="admin-controls-card" style="background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); border: 1px solid #6366f1; color: #ffffff;">
+              <div class="admin-head" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                  <span style="font-size: 18px;">🤖 <strong>RPA AUTOMATION ENGINE</strong></span>
+                  <div style="font-size: 13px; color: #818cf8; font-weight: 700; margin-top: 2px;">Robot Framework (Python Engine)</div>
+                </div>
+                <span class="pill-mini" style="background:#10b981; color:#fff; font-weight:800; font-size:12px; padding: 6px 14px;">Status: Active</span>
+              </div>
+
+              <div style="margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                  <h4 style="color:#c7d2fe; font-size:13px; font-weight:800; margin-bottom: 8px;">Active Workflows:</h4>
+                  <ul style="list-style: none; padding: 0; margin: 0; font-size: 13px; color: #94a3b8; line-height: 1.8;">
+                    <li>• <strong style="color:#ffffff;">Invoice Processing Workflow</strong> (<code>process_invoice.robot</code>)</li>
+                    <li>• <strong style="color:#ffffff;">Dataset Processing Workflow</strong> (<code>process_dataset.robot</code>)</li>
+                    <li>• <strong style="color:#ffffff;">Document Validation Robot</strong> (<code>validate_document.robot</code>)</li>
+                    <li>• <strong style="color:#ffffff;">MongoDB Storage Pipeline</strong> (<code>mongodb.resource</code>)</li>
+                  </ul>
+                </div>
+                <div style="background: rgba(15,23,42,0.6); padding: 14px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08);">
+                  <div style="font-size:12px; color:#94a3b8;">Automation Performance Metrics</div>
+                  <div style="font-size:24px; font-weight:900; color:#4ade80; margin: 4px 0;">99.4%</div>
+                  <div style="font-size:12px; color:#cbd5e1;">Automation Success Rate</div>
+                </div>
+              </div>
+
+              <!-- Robot Framework Architecture Tree Diagram -->
+              <div class="rpa-arch-tree-card">
+                <div class="rpa-tree-header">
+                  <span style="font-weight:800; font-size:14px; color:#818cf8;">🤖 ROBOT FRAMEWORK RPA ORCHESTRATION ARCHITECTURE</span>
+                  <span class="pill-mini" style="background:#4338ca; color:#ffffff;">Core Orchestrator</span>
+                </div>
+                <div class="rpa-tree-list">
+                  <div class="rpa-tree-item">
+                    <span>📄 <strong>Document Processing Robot</strong> (File Detection & Classification)</span>
+                    <span style="font-size:12px; color:#a5b4fc;"><code>process_document.robot</code></span>
+                  </div>
+                  <div class="rpa-tree-item">
+                    <span>🧾 <strong>Invoice Processing Robot</strong> (Field Extraction, Math Verification & Confidence Tier)</span>
+                    <span style="font-size:12px; color:#a5b4fc;"><code>process_invoice.robot</code></span>
+                  </div>
+                  <div class="rpa-tree-item">
+                    <span>📊 <strong>Dataset Processing Robot</strong> (Header Detection, Column Checks & Quality Score)</span>
+                    <span style="font-size:12px; color:#a5b4fc;"><code>process_dataset.robot</code></span>
+                  </div>
+                  <div class="rpa-tree-item">
+                    <span>🛡️ <strong>Document Validation Robot</strong> (Subtotal + Tax + Shipping Integrity)</span>
+                    <span style="font-size:12px; color:#a5b4fc;"><code>validate_document.robot</code></span>
+                  </div>
+                  <!-- Supporting Component -->
+                  <div class="rpa-tree-item supporting-item">
+                    <span>🧠 <strong>AI Invoice Extraction Model Trainer</strong> (Supporting Extraction Component)</span>
+                    <span class="pill-mini" style="background:#4f46e5; color:#ffffff;">Supporting Module</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Administration Controls -->
+            <div class="admin-controls-card" style="margin-top: 16px;">
               <div class="admin-head">
-                <span>⚙️ <strong>RPA Engine Administration & Tuning</strong></span>
+                <span>⚙️ <strong>RPA Engine Administration & Controls</strong></span>
                 <button id="adminResetBtn" class="btn sm danger" onclick="confirmResetDatabase()">
                   🗑️ Purge MongoDB Database
                 </button>
@@ -673,16 +796,15 @@
               </div>
             </div>
 
-            <!-- Model Training & Accuracy Tuning Card -->
+            <!-- Supporting Module Card: AI Model Training -->
             <div class="admin-controls-card" style="margin-top: 16px; background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: #ffffff; border: 1px solid #4338ca;">
               <div class="admin-head" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px; display: flex; justify-content: space-between; align-items: center;">
-                <span>🤖 <strong>AI Invoice Extraction Model Trainer</strong></span>
+                <span>🧠 <strong>AI Invoice Extraction Model Trainer</strong> (Supporting Extraction Component)</span>
                 <span class="pill-mini" style="background:#4f46e5; color:#fff;" id="modelStatusBadge">Model v1.2.0 Active (98.5% Accuracy)</span>
               </div>
               <div class="admin-actions-flex" style="margin-top: 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
                 <div style="font-size: 13px; color: #c7d2fe;">
-                  <span>Trained Corpus Patterns: <strong>Multi-Vendor Templates</strong></span> | 
-                  <span>Field Precision: <strong>High Accuracy OCR & Layout Extraction</strong></span>
+                  <span>Role: <strong>Supporting pattern extraction module used by Invoice Processing Robot</strong></span>
                 </div>
                 <button class="btn sm accent" onclick="triggerModelTraining()" id="btnTrainModel" style="background:#6366f1; color:#ffffff; border:none; box-shadow: 0 4px 14px rgba(99,102,241,0.4); font-weight:700;">
                   ⚡ Retrain AI Model Now
@@ -690,37 +812,15 @@
               </div>
             </div>
 
-            <div class="engine-pipeline-visual">
-              <div class="pipeline-step active" id="step1">
-                <span class="num">1</span>
-                <h4>Input Parsing</h4>
-                <p>Format Detection & Extraction</p>
-              </div>
-              <div class="pipeline-step active" id="step2">
-                <span class="num">2</span>
-                <h4>Pattern Extraction</h4>
-                <p>Regex & OCR Field Match</p>
-              </div>
-              <div class="pipeline-step active" id="step3">
-                <span class="num">3</span>
-                <h4>Validation Rules</h4>
-                <p>Subtotal + Tax = Total</p>
-              </div>
-              <div class="pipeline-step active" id="step4">
-                <span class="num">4</span>
-                <h4>MongoDB Sync</h4>
-                <p>Doc Insertion & Indexing</p>
-              </div>
-            </div>
-
-            <div class="engine-log-console">
+            <div class="engine-log-console" style="margin-top: 20px;">
               <div class="console-head">
-                <span>⚡ System Engine & Processing Logs</span>
+                <span>🤖 Robot Framework RPA Console & Automation Execution Logs</span>
                 <button class="btn xs ghost" onclick="clearLogsConsole()">Clear Console</button>
               </div>
               <pre class="console-body" id="consoleLogs">
-[ENGINE_INIT] Pipeline standby. Admin active monitoring...
-[MONGO_DRIVER] Connected to MongoDB Database 'smart_invoice_db'.
+🤖 [ROBOT FRAMEWORK] RPA Orchestration Engine Active.
+🤖 [ROBOT FRAMEWORK] Workflows Standby: Invoice Processing, Dataset Processing, Document Validation.
+🍃 [MONGO_DRIVER] Connected to MongoDB Database 'smart_invoice_db'.
               </pre>
             </div>
           </div>

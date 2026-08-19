@@ -30,124 +30,115 @@
 
 ## 1. Project Overview
 
-The **Smart Invoice Automation System** is a full-stack web application and RPA suite that automates the complete lifecycle of enterprise invoice processing — from document ingestion and data extraction to approval workflows, arithmetic audit validation, and database tracking. Key capabilities include:
+The **Smart Invoice Automation System** is an **RPA-based Automated Invoice and Document Processing System** powered by **Robot Framework as its core automation engine and RPA orchestration layer**.
 
-- **Multi-Format Document Ingestion** — Parses PDF documents, multi-page PDFs, Excel workbooks (`.xlsx`/`.xls`), and CSV datasets.
-- **AI/ML Pattern Extraction** — Features a trainable model ([`train_model.js`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/train_model.js)) leveraging regex pattern heuristics and token frequency weights for accurate field extraction.
-- **Arithmetic Audit Engine** — Verifies mathematical consistency: `Subtotal + Tax + Shipping = Grand Total` and per-line item accuracy: `Qty × Unit Price × (1 - Discount%) = Amount`.
-- **Role-Based Dashboards** — Three distinct role views: **AP Clerk** (Ingestion & History), **Finance Manager** (Approval Desk, Bulk Approval, Analytics), and **System Admin** (User Inspection, Engine Diagnostics, AI Model Retraining, DB Reset).
-- **MongoDB Persistence & Audit Logging** — Stores all users, invoices, and detailed activity logs in MongoDB with auto-seeding on launch.
-- **Robot Framework RPA & Quality Assurance** — Includes automated RPA workflow tasks ([`rpa_tasks.robot`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/robot_framework/rpa_tasks.robot)) and REST API test suites ([`api_tests.robot`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/robot_framework/api_tests.robot)) producing HTML reports.
+- **Robot Framework = Main Automation Engine** — Orchestrates the complete end-to-end automation workflow from document ingestion, classification, and workflow selection to validation, scoring, MongoDB persistence, and logging.
+- **AI Invoice Model = Supporting Extraction Component** — Functions as a supporting component module invoked inside the Invoice Processing Robot Workflow for vendor pattern recognition and field extraction.
+- **Multi-Format Ingestion** — Parses PDF documents, multi-page PDFs, Excel workbooks (`.xlsx`/`.xls`), and CSV datasets.
+- **Dual Robot Workflows**:
+  - **Invoice Processing Robot** — Executes field extraction, vendor validation, date checks, arithmetic verification (`Subtotal + Tax + Shipping = Total`), confidence scoring, and status assignment (`HIGH_CONFIDENCE`, `PENDING_REVIEW`, `FLAGGED`, `PROCESSING_FAILED`).
+  - **Dataset Processing Robot** — Parses generic tabular CSV/Excel datasets, detects headers, validates missing values and data types, and calculates Data Quality Scores without imposing invoice-specific validation rules.
+- **MongoDB Persistence & Audit Logging** — Stores all documents, users, and detailed RPA execution traces in MongoDB with auto-seeding.
+- **Role-Based Web Dashboards** — Three distinct role views: **AP Clerk** (Upload & History), **Finance Manager** (Approval Desk & Analytics), and **System Admin** (RPA Engine Inspector, AI Trainer, DB Purge).
 
 ---
 
-## 2. High-Level Architecture
+## 2. High-Level System Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        FRONTEND (Browser)                           │
-│  public/index.html + public/style.css + public/app.js               │
-│  ┌──────────┐  ┌──────────────────┐  ┌──────────────────┐          │
-│  │ Auth Page │→│ USER Dashboard   │  │ MGMT Dashboard   │          │
-│  │ Login/    │  │ Upload + History │  │ Approve/Reject   │          │
-│  │ Signup    │  └──────────────────┘  └──────────────────┘          │
-│  └──────────┘  ┌──────────────────┐                                 │
-│                │ ADMIN Dashboard  │                                  │
-│                │ Users + Engine   │                                  │
-│                │ + MongoDB Viewer │                                  │
-│                └──────────────────┘                                  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │ HTTP REST API (fetch)
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                      BACKEND (Node.js + Express)                    │
-│                          server.js                                  │
-│  ┌────────────────┐  ┌──────────────────┐  ┌────────────────────┐  │
-│  │ Auth Endpoints │  │ Invoice CRUD     │  │ Processing Engine  │  │
-│  │ /api/auth/*    │  │ /api/invoices    │  │ /api/process       │  │
-│  └────────────────┘  │ /api/approve     │  │ /api/train         │  │
-│                      │ /api/reject      │  └────────┬───────────┘  │
-│                      │ /api/stats       │           │              │
-│                      └──────────────────┘           ▼              │
-│                                          ┌──────────────────────┐  │
-│                                          │ documentExtractor.js │  │
-│                                          │  ├─ pdfExtractor     │  │
-│                                          │  ├─ excelExtractor   │  │
-│                                          │  ├─ csvExtractor     │  │
-│                                          │  └─ invoiceNormalizer│  │
-│                                          └──────────────────────┘  │
-│                                          ┌──────────────────────┐  │
-│                                          │ train_model.js       │  │
-│                                          │ (AI Pattern Engine)  │  │
-│                                          └──────────────────────┘  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │ Mongoose ODM
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     MongoDB Database                                │
-│                   smart_invoice_db                                   │
-│  ┌──────────┐  ┌──────────────┐  ┌──────────────┐                  │
-│  │ users    │  │ invoices     │  │ auditlogs    │                  │
-│  └──────────┘  └──────────────┘  └──────────────┘                  │
-└─────────────────────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────────────────────┐
-│              ROBOT FRAMEWORK (Python RPA + Test Suite)               │
-│  robot_framework/                                                   │
-│  ├─ rpa_tasks.robot        (RPA Automation Workflows)               │
-│  ├─ api_tests.robot        (Automated API Test Suite)               │
-│  ├─ resources/             (Reusable Keywords)                      │
-│  └─ libraries/             (Custom Python Library)                  │
-└─────────────────────────────────────────────────────────────────────┘
+```text
+                    USER / ADMIN
+                         │
+                         ▼
+                    WEB APPLICATION
+                         │
+                         ▼
+              🤖 ROBOT FRAMEWORK 🤖
+                RPA ORCHESTRATOR
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+   FILE PROCESSING   AI EXTRACTION    VALIDATION
+        │                │                │
+        ├──── PDF        ├─ Invoice       ├─ Invoice
+        ├──── CSV        │  Patterns      │  Validation
+        └──── XLSX       │                │
+                         └─ OCR / AI      └─ Dataset
+                                                Validation
+        │                │                │
+        └────────────────┼────────────────┘
+                         │
+                         ▼
+                    MONGODB
+                         │
+                         ▼
+               DASHBOARD / REPORTS
 ```
 
 ---
 
 ## 3. Complete Directory Structure
 
-```
+```text
 Invoice_System/
-├── .gitignore                          # Git ignore rules (16 lines)
+├── .gitignore                          # Git ignore rules
 ├── README.md                           # Comprehensive project documentation
 ├── Project_Explanation.md              # Exhaustive academic & developer guide
-├── package.json                        # Node.js dependencies & scripts manifest (21 lines)
+├── package.json                        # Node.js dependencies & scripts manifest
 ├── package-lock.json                   # Locked dependency tree
-│
-├── server.js                           # 🔥 MAIN BACKEND SERVER & REST API (620 lines)
-├── documentExtractor.js                # 🔀 Document routing engine (138 lines)
-├── train_model.js                      # 🤖 AI Model training pipeline (193 lines)
+├── server.js                           # Backend server REST API
+├── robot_orchestrator.py               # 🤖 Python Robot Framework RPA Orchestration Engine Bridge
+├── documentExtractor.js                # Document routing engine
+├── train_model.js                      # AI Invoice Extraction Model Trainer (Supporting Component)
 │
 ├── models/                             # 📦 Mongoose Schema Definitions
-│   ├── Invoice.js                      # Invoice schema with embedded sub-schemas (170 lines)
-│   ├── User.js                         # User account & RBAC schema (32 lines)
-│   ├── AuditLog.js                     # System audit log schema (17 lines)
-│   └── trained_invoice_model.json      # Serialized ML model weights & rules (206 lines)
+│   ├── Invoice.js                      # Invoice schema with embedded sub-schemas
+│   ├── User.js                         # User account & RBAC schema
+│   ├── AuditLog.js                     # System audit log schema
+│   └── trained_invoice_model.json      # Serialized ML model weights & rules
 │
 ├── extractors/                         # 📄 Format-Specific Extraction Engines
-│   ├── pdfExtractor.js                 # PDF text extraction & regex parsing (422 lines)
-│   ├── excelExtractor.js               # Excel (.xlsx/.xls) workbook parsing (528 lines)
-│   ├── csvExtractor.js                 # Multi-delimiter CSV parsing (430 lines)
-│   └── invoiceNormalizer.js            # Arithmetic audit & confidence scoring (169 lines)
+│   ├── pdfExtractor.js                 # PDF text extraction & regex parsing
+│   ├── excelExtractor.js               # Excel (.xlsx/.xls) workbook parsing
+│   ├── csvExtractor.js                 # Multi-delimiter CSV parsing
+│   └── invoiceNormalizer.js            # Arithmetic audit & confidence scoring
 │
-├── public/                             # 🌐 Frontend Web Application
-│   ├── index.html                      # Single Page Application HTML (824 lines)
-│   ├── style.css                       # Complete CSS layout & styling (2,836 lines)
-│   └── app.js                          # Frontend SPA logic & DOM rendering (1,578 lines)
+├── public/                             # 🌐 Frontend Web Application (Robot Framework Hero UI)
+│   ├── index.html                      # Single Page Application HTML
+│   ├── style.css                       # Complete CSS layout & styling
+│   └── app.js                          # Frontend SPA logic & DOM rendering
 │
-├── robot_framework/                    # 🤖 Robot Framework RPA & Testing
-│   ├── api_tests.robot                 # Automated API test suite (62 lines)
-│   ├── rpa_tasks.robot                 # RPA automation workflow tasks (56 lines)
-│   ├── libraries/
-│   │   └── InvoiceLibrary.py           # Custom Python helper keywords (67 lines)
-│   ├── resources/
-│   │   └── invoice_keywords.resource   # Reusable Robot Framework keywords (92 lines)
-│   └── results/                        # Generated test reports (log.html, report.html)
+├── robot_framework/                    # 🤖 ROBOT FRAMEWORK RPA AUTOMATION SUITE
+│   ├── tasks/                          # 🎯 Reusable Robot Framework Workflows
+│   │   ├── process_document.robot      # Main RPA Orchestrator task (Ingestion, Classification, Routing)
+│   │   ├── process_invoice.robot       # Dedicated Invoice Processing Robot Task
+│   │   ├── process_dataset.robot       # Dedicated Dataset Processing Robot Task
+│   │   └── validate_document.robot    # Dedicated Document Validation Robot Task
+│   │
+│   ├── resources/                      # 🧱 Reusable Robot Keywords & Modules
+│   │   ├── common.resource             # Common variables & global keywords
+│   │   ├── invoice.resource            # Invoice extraction & verification keywords
+│   │   ├── dataset.resource            # Dataset quality & column keywords
+│   │   ├── mongodb.resource            # Database persistence keywords
+│   │   ├── logging.resource            # Automation log formatting keywords
+│   │   └── invoice_keywords.resource   # Legacy keyword compatibility suite
+│   │
+│   ├── libraries/                      # 🐍 Custom Python Keyword Libraries
+│   │   ├── DocumentLibrary.py          # File type detection & document classification
+│   │   ├── InvoiceLibrary.py           # Invoice validation, confidence score & tier mapping
+│   │   ├── DatasetLibrary.py           # Tabular dataset parsing & quality scoring
+│   │   └── DatabaseLibrary.py          # PyMongo direct database driver & audit log trace
+│   │
+│   ├── api_tests.robot                 # Automated API test suite
+│   ├── rpa_tasks.robot                 # RPA automation workflow suite
+│   └── results/                        # Generated HTML execution logs & reports
 │
-├── run_robot.py                        # Python launcher for Robot Framework (39 lines)
-├── create_test_pdf.py                  # Python script generating benchmark PDF (238 lines)
-├── test_extraction.js                  # Verification test for PDF extractor (127 lines)
-├── test_spreadsheet_csv.js             # Verification test suite for Excel/CSV (234 lines)
-├── multipage_pdf_payload.json          # Sample base64 API payload
+├── run_robot.py                        # Python launcher for Robot Framework suites
+├── create_test_pdf.py                  # Benchmark test PDF generator
+├── test_extraction.js                  # Verification test for PDF extractor
+├── test_spreadsheet_csv.js             # Verification test suite for Excel/CSV
+└── multipage_pdf_payload.json          # Sample base64 API payload
+```
 │
 ├── big_demo_invoice_usd.pdf            # Benchmark PDF invoice (36 line items)
 ├── demo_invoice.xlsx                   # Benchmark Excel invoice (INR currency)

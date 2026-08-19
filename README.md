@@ -1,103 +1,109 @@
-# ⚡ Smart Invoice Automation System
+# 🤖 Smart Invoice Automation System
 
-An end-to-end **Robotic Process Automation (RPA)** and **AI-Driven Invoice Processing System** built with **Node.js, Express, MongoDB (Mongoose), SheetJS (xlsx), pdf-parse, JavaScript (ES6+), and Robot Framework**.
+An **RPA-Based Smart Invoice and Document Automation System** powered by **Robot Framework as the main automation engine and RPA orchestration layer**.
 
-This application automates multi-source invoice ingestion (PDF, Multi-page PDF, Excel `.xlsx`/`.xls`, CSV datasets), intelligent document extraction, dynamic confidence scoring, arithmetic validation, role-based approval workflows, database audit logging, ML pattern model training, and automated RPA test suite execution.
-
----
-
-## 🎯 Key Features
-
-- 🔐 **User Authentication & Role-Based Access Control (RBAC)**
-  - Password security using `bcryptjs` (salt rounds: 10).
-  - Three distinct role-based dashboards:
-    - **AP Clerk (`AP_CLERK`)**: Ingest and process single/batch PDFs, CSV datasets, and Excel spreadsheets. Restricted from approval/rejection actions (403 Forbidden).
-    - **Finance Manager (`FINANCE_MANAGER`)**: Review pending invoices, execute individual or bulk approvals based on confidence thresholds (≥95%), reject invoices with feedback notes, and view financial analytics.
-    - **System Admin (`ADMIN`)**: Full administrative control, user inspection grid, engine diagnostics, AI model retraining, and complete database purge/reset capabilities.
-
-- 📄 **Multi-Format Ingestion & Intelligent Document Processing**
-  - **Supported Input Formats**: `SINGLE_PDF`, `MULTIPLE_PDF`, `SINGLE_EXCEL` (`.xlsx`, `.xls`), `SINGLE_CSV`, and `DATASET_CSV`.
-  - **Extraction Pipeline**:
-    - **PDF Extractor** ([`pdfExtractor.js`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/extractors/pdfExtractor.js)): Native text parsing via `pdf-parse` with fallback object stream regex scanner. Parses table line items, header metadata, payment terms, currency codes, and financial totals.
-    - **Excel Extractor** ([`excelExtractor.js`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/extractors/excelExtractor.js)): SheetJS integration with keyword-density sheet selection, horizontal/vertical label mapping, percentage discount parsing, and line-item grid detection.
-    - **CSV Extractor** ([`csvExtractor.js`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/extractors/csvExtractor.js)): RFC-compliant parser with auto-delimiter detection (`,`, `;`, `|`, `\t`), quoted field parsing, embedded comma support, and metadata header extraction.
-  - **Arithmetic Audit Validator** ([`invoiceNormalizer.js`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/extractors/invoiceNormalizer.js)): Validates `Subtotal + Tax + Shipping = Grand Total` and verifies line item amounts `(Qty × Unit Price × (1 - Discount%) = Amount)`.
-  - **Confidence Scoring & Status Engine**: Assigns a 0–100% confidence score based on field presence and mathematical validity. Invoices with scores <85% or arithmetic warnings are automatically marked as `FLAGGED`.
-
-- 🤖 **AI Model Training Engine**
-  - Trainable pattern matching engine ([`train_model.js`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/train_model.js)) that tokenizes corpus text, calculates keyword frequency weights, compiles regex extraction heuristics, and serializes output to [`models/trained_invoice_model.json`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/models/trained_invoice_model.json).
-  - On-the-fly retraining via `POST /api/train` REST endpoint.
-
-- 🖥️ **Interactive Single Page Application (SPA)**
-  - Modern, responsive UI with glassmorphic elements, CSS grid layouts, animated pipeline steps, and modal inspection views.
-  - Live Key Performance Indicators (KPIs): Total Invoices, Pending Approvals, Approved, Rejected, Monetary Value ($), and Average Confidence Score (%).
-  - Search, filter, and user submission inspection tools.
-
-- 🗄️ **MongoDB Persistence & Audit Trail**
-  - Schema models for `User`, `Invoice`, and `AuditLog`.
-  - Automatic Database Seeding: Creates default accounts (`admin@invoice.com`, `manager@invoice.com`, `user@invoice.com`) and benchmark invoice records on first launch.
-  - Audit Trail: Log entries for login, signup, document extraction runs, individual/bulk approvals, rejections, model retraining, and system resets.
-
-- 🤖 **Robot Framework RPA & Test Automation**
-  - Python runner script ([`run_robot.py`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/run_robot.py)) executing Robot Framework test suites ([`api_tests.robot`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/robot_framework/api_tests.robot)) and RPA automation tasks ([`rpa_tasks.robot`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/robot_framework/rpa_tasks.robot)).
-  - Custom Python keyword library ([`InvoiceLibrary.py`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/robot_framework/libraries/InvoiceLibrary.py)) and reusable resource keywords ([`invoice_keywords.resource`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/robot_framework/resources/invoice_keywords.resource)).
-  - Automated HTML log and test report generation (`log.html`, `report.html`).
+- **Robot Framework = Main Automation Engine & RPA Orchestrator**
+- **AI Invoice Model = Supporting Extraction Component**
+- **MongoDB = Data Storage**
+- **Web Application (HTML/CSS/JS) = User Interface**
 
 ---
 
-## 🛠️ Tech Stack
+## 🎯 System Architecture & Responsibilities
 
-| Layer | Technology |
-| :--- | :--- |
-| **Backend Framework** | Node.js, Express.js |
-| **Database & ODM** | MongoDB, Mongoose |
-| **Document Parsers** | SheetJS (`xlsx`), `pdf-parse` |
-| **Authentication** | Bcryptjs, Session / Local Storage |
-| **Frontend UI** | HTML5, CSS3 (Vanilla), JavaScript ES6+ |
-| **RPA & Quality Assurance** | Python 3, Robot Framework |
-
----
-
-## 📁 Project Structure
-
+```text
+                    USER / ADMIN
+                         │
+                         ▼
+                    WEB APPLICATION
+                         │
+                         ▼
+              🤖 ROBOT FRAMEWORK 🤖
+                RPA ORCHESTRATOR
+                         │
+        ┌────────────────┼────────────────┐
+        │                │                │
+        ▼                ▼                ▼
+   FILE PROCESSING   AI EXTRACTION    VALIDATION
+        │                │                │
+        ├──── PDF        ├─ Invoice       ├─ Invoice
+        ├──── CSV        │  Patterns      │  Validation
+        └──── XLSX       │                │
+                         └─ OCR / AI      └─ Dataset
+                                                Validation
+        │                │                │
+        └────────────────┼────────────────┘
+                         │
+                         ▼
+                    MONGODB
+                         │
+                         ▼
+               DASHBOARD / REPORTS
 ```
-Invoice_System/
-├── extractors/
-│   ├── pdfExtractor.js                 # PDF text extraction & parsing routines (422 lines)
-│   ├── excelExtractor.js               # Excel workbook sheet selection & parsing (528 lines)
-│   ├── csvExtractor.js                 # Multi-delimiter RFC-compliant CSV parser (430 lines)
-│   └── invoiceNormalizer.js            # Normalization, validation & confidence engine (169 lines)
-├── models/
-│   ├── User.js                         # Mongoose schema for User accounts (32 lines)
-│   ├── Invoice.js                      # Mongoose schema for Invoice records (170 lines)
-│   ├── AuditLog.js                     # Mongoose schema for Audit Trail (17 lines)
-│   └── trained_invoice_model.json      # Serialized ML model weights & rules (206 lines)
-├── public/
-│   ├── index.html                      # Single Page Application HTML markup (824 lines)
-│   ├── style.css                       # Modern layout, components & theme styles (2,836 lines)
-│   └── app.js                          # Frontend SPA state, API handlers & DOM rendering (1,578 lines)
-├── robot_framework/
-│   ├── api_tests.robot                 # Robot Framework REST API test suite (62 lines)
-│   ├── rpa_tasks.robot                 # Robot Framework RPA execution tasks (56 lines)
-│   ├── libraries/
-│   │   └── InvoiceLibrary.py           # Custom Python helper keyword library (67 lines)
-│   ├── resources/
-│   │   └── invoice_keywords.resource   # Reusable keyword definitions (92 lines)
-│   └── results/                        # Generated execution reports (log.html, report.html)
-├── test_files/                         # Standardized test CSV datasets
-│   ├── csv_metadata_items.csv
-│   ├── csv_items_only.csv
-│   ├── csv_semicolon.csv
-│   ├── csv_quoted_desc.csv
-│   └── csv_multi_currency.csv
-├── big_demo_invoice_usd.pdf            # 2-page benchmark PDF invoice (36 line items)
-├── demo_invoice.xlsx                   # Benchmark Excel invoice (INR currency)
-├── demo_invoice_xlsx_orbit_eur.xlsx    # Benchmark Excel invoice (EUR currency)
-├── create_test_pdf.py                  # Python script to generate benchmark PDF (238 lines)
-├── documentExtractor.js                # Format routing engine (138 lines)
-├── multipage_pdf_payload.json          # Sample base64 API payload
-├── run_robot.py                        # Python launcher for Robot Framework (39 lines)
-├── server.js                           # Express server, REST endpoints & seeding (620 lines)
+
+### Robot Framework RPA Workflow Steps:
+1. Receive processing request from Web Application
+2. Start Robot Framework automation
+3. Detect uploaded file type (`PDF`, `XLSX`, `XLS`, `CSV`)
+4. Extract file content & structure
+5. Classify document (`INVOICE`, `DATASET`, or `UNKNOWN`)
+6. Select appropriate processing workflow
+7. Run Invoice Extraction or Dataset Processing Workflow
+8. Validate extracted information
+9. Calculate confidence or quality score
+10. Store results in MongoDB
+11. Update processing status
+12. Generate automation logs
+13. Return results to the application
+
+---
+
+## 🚀 Separate Robot Framework Workflows
+
+### 1. Invoice Processing Robot Workflow (`process_invoice.robot`)
+- Extracts PDF / Excel / CSV invoices
+- Calls AI / Pattern Extraction Model for vendor & pattern recognition
+- Normalizes invoice fields (vendor, invoice number, dates, line items, totals)
+- Validates vendor, invoice number, dates, line items, and arithmetic (`Subtotal + Tax + Shipping = Total`)
+- Calculates Invoice Confidence Score
+- Maps status (`HIGH_CONFIDENCE`, `PENDING_REVIEW`, `FLAGGED`, `PROCESSING_FAILED`)
+- Persists result in MongoDB
+
+### 2. Dataset Processing Robot Workflow (`process_dataset.robot`)
+- Parses generic CSV or Excel datasets
+- Detects table headers & column structure
+- Validates dataset structure, required columns, missing values, and data types
+- Calculates Data Quality Score (0 - 100%)
+- Sets status (`VALIDATED`, `DATA_QUALITY_OK`, `ATTENTION_REQUIRED`)
+- **Crucial Rule**: Generic datasets are **NEVER** flagged for missing vendor, missing invoice number, missing due date, or missing grand total. Those checks belong only to the Invoice Processing Robot.
+
+---
+
+## 📁 Modular Robot Framework Directory Structure
+
+```text
+robot_framework/
+│
+├── tasks/
+│   ├── process_document.robot      # Main RPA Orchestrator task (Ingestion, Classification, Routing)
+│   ├── process_invoice.robot       # Dedicated Invoice Processing Robot Task
+│   ├── process_dataset.robot       # Dedicated Dataset Processing Robot Task
+│   └── validate_document.robot    # Dedicated Document Validation Robot Task
+│
+├── resources/
+│   ├── common.resource             # Common variables & global keywords
+│   ├── invoice.resource            # Invoice extraction & verification keywords
+│   ├── dataset.resource            # Dataset quality & column keywords
+│   ├── mongodb.resource            # Database persistence keywords
+│   ├── logging.resource            # Automation log formatting keywords
+│   └── invoice_keywords.resource   # Legacy keyword compatibility suite
+│
+└── libraries/
+    ├── DocumentLibrary.py          # File type detection & document classification
+    ├── InvoiceLibrary.py           # Invoice validation, confidence score & tier mapping
+    ├── DatasetLibrary.py           # Tabular dataset parsing & quality scoring
+    └── DatabaseLibrary.py          # PyMongo direct database driver & audit log trace
+```
 ├── test_extraction.js                  # PDF extraction verification script (127 lines)
 ├── test_spreadsheet_csv.js             # Excel & CSV test verification suite (234 lines)
 ├── train_model.js                      # AI model training script (193 lines)
