@@ -104,9 +104,9 @@ robot_framework/
     ├── DatasetLibrary.py           # Tabular dataset parsing & quality scoring
     └── DatabaseLibrary.py          # PyMongo direct database driver & audit log trace
 ```
-├── test_extraction.js                  # PDF extraction verification script (127 lines)
-├── test_spreadsheet_csv.js             # Excel & CSV test verification suite (234 lines)
-├── train_model.js                      # AI model training script (193 lines)
+├── test_extraction.js                  # PDF extraction verification script
+├── test_spreadsheet_csv.js             # Excel & CSV test verification suite
+├── train_model.js                      # AI model training script
 ├── package.json                        # Node.js manifest & scripts
 └── README.md                           # System documentation
 ```
@@ -151,13 +151,26 @@ The web server will start at `http://localhost:3000`. On first launch, MongoDB w
 
 ---
 
-## 🔑 Default User Credentials
+## 🔑 User Authentication & Role-Based Access
 
-| Role | Email | Password | Permissions |
+The system features complete MongoDB-backed user authentication with role-based dashboard views and 1-click quick credentials auto-fill.
+
+### Features
+- **Sign Up / Registration**: Register new accounts with role selection (`AP_CLERK`, `ADMIN`).
+- **Log In**: Secure password verification via `bcryptjs` against MongoDB.
+- **Password Visibility Toggle**: Interactive show/hide password toggle (🙈/👁️) for all password inputs.
+- **Role-Based Dashboards**:
+  - 👤 **USER (AP Clerk)**: Submit invoices/datasets and view personal submission history.
+  - 👑 **MANAGEMENT (Approver)**: Review pending invoices, process approvals/rejections, and view financial analytics.
+  - ⚙️ **ADMIN (System Admin)**: View all registered users, system flow inspector, and raw MongoDB database browser.
+
+### Default Demo Credentials
+
+| Role | Email | Password | Dashboard Permissions |
 | :--- | :--- | :--- | :--- |
-| **System Admin** | `admin@invoice.com` | `admin123` | Full access, Database Reset, User Inspection, Model Retraining |
+| **System Admin** | `admin@invoice.com` | `admin123` | Full access, Reset DB, User Inspection, ML Model Retraining |
 | **Finance Manager** | `manager@invoice.com` | `admin123` | Review Pending Invoices, Single Approval, Bulk Approval (≥95%), Rejection |
-| **AP Clerk** | `user@invoice.com` | `user123` | Upload Single PDF, Batch PDF, CSV, & Excel Spreadsheets |
+| **AP Clerk (USER)** | `user@invoice.com` | `user123` | Upload Single PDF, Batch PDF, CSV, & Excel Spreadsheets |
 
 ---
 
