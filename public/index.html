@@ -784,6 +784,40 @@
     </div>
   </div>
 
+  <!-- Rejection Reason Pop-up Modal -->
+  <div class="modal-overlay" id="rejectModal">
+    <div class="modal-content" style="max-width: 480px; background: #ffffff; color: #0f172a; border-radius: 16px; box-shadow: 0 20px 40px rgba(0,0,0,0.3); border: 1px solid #cbd5e1;">
+      <div class="modal-header" style="border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; margin-bottom: 16px;">
+        <h3 style="color: #ef4444; font-size: 18px; font-weight: 800; display: flex; align-items: center; gap: 8px; margin: 0;">
+          <span>🚫</span> Reject Invoice Confirmation
+        </h3>
+        <button class="close-btn" onclick="closeRejectModal()" style="color: #64748b; font-size: 20px; cursor: pointer;">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="rejectModalInvoiceInfo" style="margin-bottom: 16px; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; font-size: 13px; color: #334155; line-height: 1.6;">
+          <!-- Dynamically populated invoice ID, vendor, total -->
+        </div>
+
+        <div class="form-group" style="margin-bottom: 16px;">
+          <label for="rejectReasonInput" style="font-size: 13px; font-weight: 700; color: #0f172a; display: block; margin-bottom: 6px;">
+            Rejection Audit Reason <span style="color: #ef4444;">*</span>
+          </label>
+          <textarea id="rejectReasonInput" class="form-input" rows="4" 
+            placeholder="Enter reason for Finance Management rejection (e.g. Duplicate submission, Price discrepancy, Missing PO...)"
+            style="width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-size: 13px; color: #0f172a; background: #ffffff; resize: vertical; box-sizing: border-box;"></textarea>
+          <div id="rejectModalError" style="display: none; color: #ef4444; font-size: 12px; font-weight: 700; margin-top: 6px;">
+            ⚠️ Rejection reason is required. Please add a reason before submitting.
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px;">
+          <button class="btn sm secondary" onclick="closeRejectModal()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-weight: 600;">Cancel</button>
+          <button class="btn sm danger" onclick="submitRejectInvoice()" style="background: #ef4444; color: #ffffff; border: none; border-radius: 6px; padding: 8px 16px; cursor: pointer; font-weight: 700;">🚫 Confirm Rejection</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 

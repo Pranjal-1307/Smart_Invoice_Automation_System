@@ -1,6 +1,6 @@
 {
   "version": "2.0.0-trained-notax",
-  "trainedAt": "2026-08-18T19:33:27.702Z",
+  "trainedAt": "2026-08-19T03:20:49.169Z",
   "accuracyScore": 0.992,
   "taxHandling": false,
   "sampleCount": 6,

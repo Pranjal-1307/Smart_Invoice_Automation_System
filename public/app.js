@@ -949,6 +949,46 @@ async function processUploadedFiles(files, inputType) {
   window.pendingUploadFiles[inputType] = files;
 }
 
+function showNotificationAlert(message, type = 'info', title = '') {
+  let toastContainer = document.getElementById('globalToastContainer');
+  if (!toastContainer) {
+    toastContainer = document.createElement('div');
+    toastContainer.id = 'globalToastContainer';
+    toastContainer.className = 'toast-notification-container';
+    document.body.appendChild(toastContainer);
+  }
+
+  const toast = document.createElement('div');
+  toast.className = `toast-notification toast-${type}`;
+
+  const iconMap = {
+    'success': '✅',
+    'error': '🚫',
+    'warning': '⚠️',
+    'info': 'ℹ️'
+  };
+
+  const icon = iconMap[type] || '🔔';
+
+  toast.innerHTML = `
+    <div class="toast-icon">${icon}</div>
+    <div class="toast-content">
+      ${title ? `<div class="toast-title">${title}</div>` : ''}
+      <div class="toast-message">${message.replace(/\n/g, '<br>')}</div>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">✕</button>
+  `;
+
+  toastContainer.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentElement) {
+      toast.style.animation = 'fadeOutToast 0.4s ease forwards';
+      setTimeout(() => toast.remove(), 400);
+    }
+  }, 6000);
+}
+
 async function uploadAndExtractFiles(inputType) {
   const files = window.pendingUploadFiles ? window.pendingUploadFiles[inputType] : null;
   if (!files || files.length === 0) return;
@@ -969,6 +1009,8 @@ async function uploadAndExtractFiles(inputType) {
     notes = document.getElementById('batchNotesInput')?.value || '';
   }
 
+  let uploadSuccessCount = 0;
+
   for (const file of files) {
     const dataUrl = await readFileAsDataURL(file);
     let rawTextContent = null;
@@ -979,7 +1021,7 @@ async function uploadAndExtractFiles(inputType) {
     const ext = file.name.split('.').pop().toLowerCase();
     const fileType = ext === 'pdf' ? 'pdf' : (ext === 'xlsx' || ext === 'xls') ? 'xlsx' : ext === 'csv' ? 'csv' : 'pdf';
 
-    await triggerProcess(inputType, file.name, {
+    const isSuccess = await triggerProcess(inputType, file.name, {
       fileSize: file.size,
       fileType: fileType,
       fileDataUrl: dataUrl,
@@ -988,6 +1030,10 @@ async function uploadAndExtractFiles(inputType) {
       customDate,
       notes
     });
+
+    if (isSuccess) {
+      uploadSuccessCount++;
+    }
   }
 
   // Clear preview and input fields
@@ -1003,6 +1049,13 @@ async function uploadAndExtractFiles(inputType) {
   if (document.getElementById('pdfNotesInput')) document.getElementById('pdfNotesInput').value = '';
   if (document.getElementById('excelVendorInput')) document.getElementById('excelVendorInput').value = '';
   if (document.getElementById('excelNotesInput')) document.getElementById('excelNotesInput').value = '';
+
+  // Show notification alert box when data is uploaded by user
+  if (uploadSuccessCount > 0) {
+    const successMsg = `Data Uploaded Successfully!\n${uploadSuccessCount} file(s) processed and stored in database.`;
+    showNotificationAlert(successMsg, "success", "Data Uploaded Successfully");
+    alert(`✅ Data Uploaded Successfully!\n\n${uploadSuccessCount} file(s) processed and stored into system database.`);
+  }
 }
 
 function readFileAsDataURL(file) {
@@ -1070,9 +1123,17 @@ async function triggerProcess(inputType, fileName, extraData = null) {
     if (data.success) {
       appendLog(`[MONGODB_STORE] Ingested ${data.processed ? data.processed.length : 1} invoice document(s) by ${userEmailHeader}`);
       fetchInvoices();
+      return true;
+    } else {
+      showNotificationAlert(`Upload Error: ${data.message || 'Processing failed'}`, "error", "Upload Error");
+      alert(`Upload Error: ${data.message || 'Processing failed'}`);
+      return false;
     }
   } catch (err) {
     console.error("Processing error:", err);
+    showNotificationAlert(`Upload Error: ${err.message}`, "error", "Upload Error");
+    alert(`Upload Error: ${err.message}`);
+    return false;
   }
 }
 
@@ -1096,6 +1157,7 @@ async function approveInvoice(id) {
     const data = await res.json();
     if (data.success) {
       appendLog(`[APPROVAL] Invoice ${id} approved by ${userEmailHeader}`);
+      showNotificationAlert(`Invoice ${id} Approved Successfully!`, "success", "Approval Successful");
       fetchInvoices();
     } else {
       alert(`Approval error: ${data.message}`);
@@ -1121,6 +1183,7 @@ async function executeBulkApproval() {
     const data = await res.json();
     if (data.success) {
       appendLog(`[BULK_APPROVAL] ${data.approvedCount} invoice(s) approved by ${userEmailHeader}`);
+      showNotificationAlert(`${data.approvedCount} invoice(s) Approved Successfully!`, "success", "Bulk Approval Successful");
       fetchInvoices();
     }
   } catch (err) {
@@ -1128,10 +1191,53 @@ async function executeBulkApproval() {
   }
 }
 
-async function rejectInvoice(id) {
-  const reason = prompt("Enter rejection reason for Finance Manager audit log:");
-  if (reason === null) return;
+let currentRejectInvoiceId = null;
 
+function rejectInvoice(id) {
+  const inv = currentInvoices.find(i => i.id === id || i._id === id);
+  currentRejectInvoiceId = id;
+
+  const infoEl = document.getElementById('rejectModalInvoiceInfo');
+  const inputEl = document.getElementById('rejectReasonInput');
+  const errEl = document.getElementById('rejectModalError');
+
+  if (infoEl) {
+    infoEl.innerHTML = `
+      <div><strong>Invoice #:</strong> <code>${inv ? inv.invoiceNumber || inv.id : id}</code></div>
+      <div><strong>Vendor:</strong> <strong>${inv ? inv.vendor : 'Unknown Vendor'}</strong></div>
+      <div><strong>Total Amount:</strong> <strong style="color:#059669;">$${(inv ? inv.total || 0 : 0).toFixed(2)}</strong></div>
+    `;
+  }
+
+  if (inputEl) inputEl.value = '';
+  if (errEl) errEl.style.display = 'none';
+
+  const modal = document.getElementById('rejectModal');
+  if (modal) modal.classList.add('active');
+}
+
+function closeRejectModal() {
+  const modal = document.getElementById('rejectModal');
+  if (modal) modal.classList.remove('active');
+  currentRejectInvoiceId = null;
+}
+
+async function submitRejectInvoice() {
+  if (!currentRejectInvoiceId) return;
+
+  const inputEl = document.getElementById('rejectReasonInput');
+  const errEl = document.getElementById('rejectModalError');
+  const reason = inputEl ? inputEl.value.trim() : '';
+
+  if (!reason) {
+    if (errEl) errEl.style.display = 'block';
+    showNotificationAlert("⚠️ Rejection Reason Required: Please enter a reason in the pop-up field.", "warning", "Reason Required");
+    return;
+  }
+
+  if (errEl) errEl.style.display = 'none';
+
+  const id = currentRejectInvoiceId;
   const userEmailHeader = currentUser ? currentUser.email : 'manager@invoice.com';
 
   try {
@@ -1144,14 +1250,25 @@ async function rejectInvoice(id) {
       },
       body: JSON.stringify({ id, reason, role: currentRole })
     });
+
     const data = await res.json();
+
     if (data.success) {
-      appendLog(`[REJECTION] Invoice ${id} rejected by ${userEmailHeader}`);
+      closeRejectModal();
+
+      appendLog(`[REJECTION] Invoice ${id} rejected by ${userEmailHeader}: ${reason}`);
+      const rejectMsg = `Data Rejected Successfully!\nReason: "${reason}"`;
+      showNotificationAlert(rejectMsg, "error", "Data Rejected by Management");
+
+      // Alert box showing Data Rejected Successfully!
+      alert(`🚫 Data Rejected Successfully!\n\nReason: "${reason}"\nInvoice ID: ${id}`);
       fetchInvoices();
     } else {
+      showNotificationAlert(`Rejection error: ${data.message}`, "error", "Rejection Error");
       alert(`Rejection error: ${data.message}`);
     }
   } catch (err) {
+    showNotificationAlert("Rejection error: " + err.message, "error", "Rejection Error");
     alert("Rejection error: " + err.message);
   }
 }
@@ -1314,7 +1431,17 @@ function inspectInvoice(id) {
         </div>
       </div>
 
-      ${inv.notes ? `
+      ${inv.rejectionReason ? `
+        <div style="margin-bottom:14px; padding:12px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px;">
+          <span style="font-size:11px; font-weight:800; color:#dc2626; text-transform:uppercase; letter-spacing:0.5px;">🚫 MONGODB STORED REJECTION REASON:</span>
+          <div style="font-size:13px; color:#991b1b; font-weight:700; margin-top:3px;">"${inv.rejectionReason}"</div>
+        </div>
+      ` : inv.approvalReason ? `
+        <div style="margin-bottom:14px; padding:12px 14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;">
+          <span style="font-size:11px; font-weight:800; color:#166534; text-transform:uppercase; letter-spacing:0.5px;">✅ MONGODB STORED APPROVAL REMARK:</span>
+          <div style="font-size:13px; color:#14532d; font-weight:700; margin-top:3px;">"${inv.approvalReason}"</div>
+        </div>
+      ` : inv.notes ? `
         <div style="margin-bottom:14px; padding:10px 14px; background:#eef2ff; border:1px solid #c7d2fe; border-radius:8px;">
           <span style="font-size:11px; font-weight:700; color:#3730a3; text-transform:uppercase;">USER REMARKS / NOTES:</span>
           <div style="font-size:13px; color:#1e1b4b; font-weight:600; margin-top:2px;">📝 "${inv.notes}"</div>

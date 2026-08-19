@@ -142,6 +142,14 @@ const invoiceSchema = new mongoose.Schema({
   fileType: String,
   fileSize: Number,
   notes: String,
+  rejectionReason: {
+    type: String,
+    default: ''
+  },
+  approvalReason: {
+    type: String,
+    default: ''
+  },
   customVendor: String,
   createdBy: {
     type: String,

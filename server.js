@@ -488,14 +488,17 @@ app.post('/api/approve', async (req, res) => {
     const inv = await Invoice.findOne({ id: id });
     if (!inv) return res.status(404).json({ success: false, message: "Invoice not found" });
 
+    const approvalMsg = notes ? notes.trim() : `Approved by Management (${userEmail})`;
     inv.status = "APPROVED";
+    inv.approvalReason = approvalMsg;
+    inv.notes = approvalMsg;
     inv.updatedAt = new Date();
-    inv.processingLogs.push(`Approved by ${userRole} (${userEmail}) at ${new Date().toLocaleTimeString()} ${notes ? `(Note: ${notes})` : ''}`);
+    inv.processingLogs.push(`Approved by ${userRole} (${userEmail}) at ${new Date().toLocaleTimeString()} (Note: ${approvalMsg})`);
     await inv.save();
 
     await AuditLog.create({
       action: "INVOICE_APPROVED",
-      details: `Invoice ${id} approved by ${userEmail} [${userRole}]`,
+      details: `Invoice ${id} approved by ${userEmail} [${userRole}] - Reason/Note: "${approvalMsg}"`,
       userEmail
     });
 
@@ -522,9 +525,12 @@ app.post('/api/approve-bulk', async (req, res) => {
     const pendingInvoices = await Invoice.find({ status: 'PENDING', confidenceScore: { $gte: threshold } });
     
     for (let inv of pendingInvoices) {
+      const bulkNote = `Bulk Approved by ${userRole} (${userEmail}) - Confidence ${(inv.confidenceScore * 100).toFixed(0)}% >= ${(threshold * 100).toFixed(0)}%`;
       inv.status = "APPROVED";
+      inv.approvalReason = bulkNote;
+      inv.notes = bulkNote;
       inv.updatedAt = new Date();
-      inv.processingLogs.push(`Bulk Approved by ${userRole} (${userEmail}) (Confidence: ${(inv.confidenceScore * 100).toFixed(0)}% >= ${(threshold * 100).toFixed(0)}%)`);
+      inv.processingLogs.push(bulkNote);
       await inv.save();
     }
 
@@ -553,17 +559,27 @@ app.post('/api/reject', async (req, res) => {
       });
     }
 
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        success: false,
+        message: "Rejection reason is required. Please add a reason to reject this invoice."
+      });
+    }
+
     const inv = await Invoice.findOne({ id: id });
     if (!inv) return res.status(404).json({ success: false, message: "Invoice not found" });
 
+    const cleanReason = reason.trim();
     inv.status = "REJECTED";
+    inv.rejectionReason = cleanReason;
+    inv.notes = `Rejection Reason: ${cleanReason}`;
     inv.updatedAt = new Date();
-    inv.processingLogs.push(`Rejected by ${userRole} (${userEmail}): ${reason || 'No reason provided'}`);
+    inv.processingLogs.push(`Rejected by ${userRole} (${userEmail}): ${cleanReason}`);
     await inv.save();
 
     await AuditLog.create({
       action: "INVOICE_REJECTED",
-      details: `Invoice ${id} rejected by ${userEmail} [${userRole}] (${reason || 'No reason'})`,
+      details: `Invoice ${id} rejected by ${userEmail} [${userRole}] - Reason: "${cleanReason}"`,
       userEmail
     });
 
