@@ -331,27 +331,29 @@ Invoice_System/
 ---
 
 #### 📄 [`public/index.html`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/public/index.html)
-**Size:** 824 lines | 37.2 KB  
-**Purpose:** Single Page Application HTML markup. Contains authentication screen (login/signup overlay with demo credential fill buttons) and 3 role-based dashboards:
-- **USER Dashboard**: Upload zones for PDF, Excel, and CSV with personal history table.
-- **MANAGEMENT Dashboard**: Approval desk grid, bulk approval triggers, and vendor distribution charts.
-- **ADMIN Dashboard**: User inspection panel, RPA engine log console, model trainer card, and raw MongoDB collection table.
+**Size:** 943 lines | 46.4 KB  
+**Purpose:** Single Page Application HTML markup. Contains dedicated light-themed authentication page overlay (log in / sign up form tabs, show/hide password buttons, and 1-click quick demo fill chips) and 3 role-based dashboards:
+- **Auth Page Overlay**: Log in & Sign up form cards with interactive tab switching and 1-click credentials auto-fill buttons.
+- **USER Dashboard**: Upload zones for PDF, Excel, and CSV with personal submission history table.
+- **MANAGEMENT Dashboard**: Approval desk grid, bulk approval triggers, and vendor distribution analytics.
+- **ADMIN Dashboard**: User inspection box, Robot Framework RPA engine log console, model trainer card, and raw MongoDB collection inspector.
 
 ---
 
 #### 📄 [`public/app.js`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/public/app.js)
-**Size:** 1,578 lines | 64.2 KB  
+**Size:** 1,956 lines | 84.7 KB  
 **Purpose:** Complete frontend application logic:
-- User session state management (`initAuth`, `handleLoginSubmit`, `handleLogout`).
-- Drag-and-drop file readers converting uploads to base64.
-- API communication functions (`fetchInvoices`, `approveInvoice`, `rejectInvoice`, `executeBulkApproval`, `triggerModelTraining`).
-- Dynamic DOM table rendering, modal views, and chart visualizations.
+- **Authentication & RBAC**: Account session persistence in `localStorage` (`initAuth`), login handler (`handleLoginSubmit`), registration handler (`handleSignupSubmit`), logout (`handleLogout`), auth tab switcher (`switchAuthTab`), quick credential filler (`fillQuickCredentials`), and password visibility toggle (`togglePasswordVisibility`).
+- **Dynamic Server Base URL**: Auto-detects runtime environment (`http://localhost:3000`, custom dev ports, or local `file://` scheme) to route API requests smoothly.
+- **Document Processing**: Drag-and-drop file readers converting uploads to base64 for server processing.
+- **API Interaction**: Communication functions (`fetchInvoices`, `approveInvoice`, `rejectInvoice`, `executeBulkApproval`, `triggerModelTraining`).
+- **Dashboard Views**: Dynamic DOM table rendering, sub-tab navigation, modal views (flag reason breakdown, calculation explanations), and analytical UI widgets.
 
 ---
 
 #### 📄 [`public/style.css`](file:///c:/Users/shahp/OneDrive/Desktop/College/SEM_9/RPA/Invoice_System/public/style.css)
-**Size:** 2,836 lines | 51.0 KB  
-**Purpose:** Modern layout styling featuring glassmorphism, CSS Grid, color-coded status badges, custom scrollbars, pipeline visual animations, and responsive breakpoints.
+**Size:** 2,836 lines | 61.5 KB  
+**Purpose:** Modern layout styling featuring glassmorphism, CSS Grid, dedicated authentication page styling, password toggle wrapper buttons, status badges, custom scrollbars, pipeline visual animations, and responsive breakpoints.
 
 ---
 
