@@ -601,30 +601,79 @@ tr:hover td {
 }
 
 /* Status Badges */
-.badge-status {
+.badge-status, .status-badge {
   padding: 4px 10px;
   border-radius: 20px;
   font-size: 11px;
   font-weight: 700;
   display: inline-block;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
 }
 
-.badge-status.PENDING {
+.badge-status.PENDING, .status-badge.status-pending {
   background: rgba(245, 158, 11, 0.15);
-  color: var(--warning);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.35);
 }
 
-.badge-status.APPROVED {
+.badge-status.PROCESSED, .status-badge.status-processed {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+
+.badge-status.APPROVED, .status-badge.status-approved {
   background: rgba(16, 185, 129, 0.15);
-  color: var(--accent);
-  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
-.badge-status.REJECTED {
+.badge-status.REJECTED, .status-badge.status-rejected {
   background: rgba(239, 68, 68, 0.15);
-  color: var(--danger);
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.badge-status.FLAGGED, .status-badge.status-flagged {
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.4);
+}
+
+.badge-status.DUPLICATE, .status-badge.status-duplicate {
+  background: rgba(239, 68, 68, 0.2);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+}
+
+/* Distinct Issue Pill Tags */
+.tag-flagged-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(245, 158, 11, 0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
+}
+
+.tag-duplicate-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.45);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.3px;
 }
 
 /* Approval Desk Cards */

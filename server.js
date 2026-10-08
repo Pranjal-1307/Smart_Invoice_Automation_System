@@ -200,17 +200,23 @@ async function runProcessingEngine(inputData) {
       const invoiceDate = (extracted.date || '').trim();
       const totalAmount = typeof extracted.total === 'number' ? extracted.total : 0;
 
-      if (vendor && vendor !== 'Unknown Vendor' && invoiceNumber && !invoiceNumber.includes('UNPARSED') && invoiceDate) {
+      if (vendor && vendor !== 'Unknown Vendor' && invoiceNumber && !invoiceNumber.includes('UNPARSED')) {
         try {
           const duplicateInvoice = await Invoice.findOne({
-            vendor: new RegExp(`^${vendor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-            invoiceNumber: new RegExp(`^${invoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
-            date: invoiceDate,
-            total: { $gte: totalAmount - 0.01, $lte: totalAmount + 0.01 }
+            $or: [
+              {
+                vendor: new RegExp(`^${vendor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+                invoiceNumber: new RegExp(`^${invoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+              },
+              {
+                invoiceNumber: new RegExp(`^${invoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+                total: { $gte: totalAmount - 0.01, $lte: totalAmount + 0.01 }
+              }
+            ]
           });
 
           if (duplicateInvoice) {
-            const dupMsg = `Duplicate invoice detected: invoice ${invoiceNumber} from ${vendor} already exists.`;
+            const dupMsg = `Duplicate invoice detected: invoice ${invoiceNumber} from ${vendor} already exists (${duplicateInvoice.id}).`;
             const duplicateReason = {
               field: 'invoiceNumber',
               validation: 'DUPLICATE_INVOICE_CHECK',
@@ -229,10 +235,10 @@ async function runProcessingEngine(inputData) {
             extracted.status = 'FLAGGED';
             extracted.flagReasons = extracted.flagReasons || [];
             if (!extracted.flagReasons.some(r => r.reasonCode === 'DUPLICATE_INVOICE')) {
-              extracted.flagReasons.push(duplicateReason);
+              extracted.flagReasons.unshift(duplicateReason);
             }
             extracted.validationResults = extracted.validationResults || [];
-            extracted.validationResults.push(duplicateReason);
+            extracted.validationResults.unshift(duplicateReason);
             extracted.decisionReason = `File flagged: ${dupMsg}`;
             extracted.recommendedAction = 'Verify if this invoice is a duplicate submission before proceeding.';
           }

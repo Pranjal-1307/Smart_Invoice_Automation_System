@@ -5,6 +5,78 @@ let currentRole = 'AP_CLERK'; // AP_CLERK (USER), FINANCE_MANAGER (MANAGEMENT), 
 let currentUser = null;
 let selectedAdminUserEmail = null;
 
+const REASON_CODE_TITLES = {
+  'DUPLICATE_INVOICE': 'Duplicate Invoice',
+  'SUBTOTAL_MISMATCH': 'Subtotal Calculation Mismatch',
+  'TOTAL_MISMATCH': 'Grand Total Mismatch',
+  'LINE_ITEM_CALCULATION_MISMATCH': 'Line Item Calculation Mismatch',
+  'TAX_CALCULATION_MISMATCH': 'Tax Calculation Mismatch',
+  'INVALID_AMOUNT': 'Invalid Amount',
+  'MISSING_REQUIRED_COLUMN': 'Missing Required Column',
+  'EMPTY_REQUIRED_VALUE': 'Empty Required Value',
+  'DATA_QUALITY_BELOW_THRESHOLD': 'Data Quality Below Threshold',
+  'VENDOR_NOT_FOUND': 'Vendor Not Found',
+  'INVOICE_NUMBER_NOT_FOUND': 'Invoice Number Not Found',
+  'DATE_NOT_FOUND': 'Invoice Date Not Found',
+  'CONFIDENCE_BELOW_THRESHOLD': 'Confidence Below Threshold'
+};
+
+function getReasonTitle(code) {
+  if (!code) return 'Flagged Issue';
+  if (REASON_CODE_TITLES[code]) return REASON_CODE_TITLES[code];
+  return code.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Duplicate detector: If there are multiple identical invoices, leaves ONE (earliest) as normal and flags the others as duplicates
+function isInvoiceDuplicateInList(inv, allInvoices) {
+  if (!inv) return false;
+  const invList = (allInvoices && allInvoices.length > 0) ? allInvoices : currentInvoices;
+  if (!invList || invList.length <= 1) return false;
+
+  const invNum = (inv.invoiceNumber || '').trim().toLowerCase();
+  const invVendor = (inv.vendor || '').trim().toLowerCase();
+  const invTotal = typeof inv.total === 'number' ? inv.total : parseFloat(inv.total) || 0;
+
+  if (!invNum || invNum.includes('unparsed')) {
+    return false;
+  }
+
+  // Find all matching invoices
+  const matches = invList.filter(other => {
+    if (!other) return false;
+    const oNum = (other.invoiceNumber || '').trim().toLowerCase();
+    const oVendor = (other.vendor || '').trim().toLowerCase();
+    const oTotal = typeof other.total === 'number' ? other.total : parseFloat(other.total) || 0;
+
+    if (!oNum || oNum.includes('unparsed')) return false;
+    if (invNum !== oNum) return false;
+
+    const sameVendor = invVendor && oVendor && invVendor !== 'unknown vendor' && invVendor === oVendor;
+    const sameTotal = Math.abs(invTotal - oTotal) < 0.02;
+
+    return sameVendor || sameTotal;
+  });
+
+  if (matches.length <= 1) {
+    return false;
+  }
+
+  // Sort matches by creation date ascending (earliest first), fallback to ID
+  matches.sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.date || 0).getTime();
+    const timeB = new Date(b.createdAt || b.date || 0).getTime();
+    if (timeA !== timeB) return timeA - timeB;
+    return String(a.id || a._id || '').localeCompare(String(b.id || b._id || ''));
+  });
+
+  // Earliest invoice in the group is the NORMAL original invoice
+  const earliest = matches[0];
+  const thisId = inv.id || inv._id;
+  const earliestId = earliest.id || earliest._id;
+
+  return thisId !== earliestId;
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   initDragAndDrop();
@@ -531,7 +603,7 @@ function filterUserHistory() {
   const userEmail = currentUser ? currentUser.email : 'user@invoice.com';
   if (ownerTag) ownerTag.textContent = `Showing invoices for: ${userEmail}`;
 
-  const userInvoices = currentInvoices.filter(i => i.createdBy === userEmail || !i.createdBy || i.createdBy === 'AP Clerk');
+  const userInvoices = currentInvoices.filter(i => i.createdBy === userEmail || !i.createdBy || i.createdBy === 'AP Clerk' || (currentUser && currentUser.role === 'ADMIN'));
 
   const searchTerm = (document.getElementById('userHistorySearchInput')?.value || '').toLowerCase().trim();
   const typeFilter = document.getElementById('userHistoryTypeFilter')?.value || 'ALL';
@@ -549,11 +621,23 @@ function filterUserHistory() {
     // Type filter
     const isExcel = inv.fileType === 'xlsx' || inv.fileType === 'xls' || inv.fileType === 'csv' || inv.inputType === 'DATASET_CSV' || (inv.filename && (inv.filename.endsWith('.xlsx') || inv.filename.endsWith('.xls') || inv.filename.endsWith('.csv')));
     const isPdf = !isExcel;
-
     const matchesType = typeFilter === 'ALL' || (typeFilter === 'PDF' && isPdf) || (typeFilter === 'EXCEL' && isExcel);
 
-    // Status filter
-    const matchesStatus = statusFilter === 'ALL' || inv.status === statusFilter;
+    // Status & Tag filters
+    const isDuplicate = isInvoiceDuplicateInList(inv, currentInvoices) || (inv.flagReasons || []).some(r => r.reasonCode === 'DUPLICATE_INVOICE');
+    const nonDupFlags = (inv.flagReasons || []).filter(r => r.reasonCode !== 'DUPLICATE_INVOICE' && !r.message?.toLowerCase().includes('duplicate'));
+    const hasFlaggedIssues = nonDupFlags.length > 0 || (inv.status === 'FLAGGED' && !isDuplicate);
+
+    let matchesStatus = true;
+    if (statusFilter === 'ALL') {
+      matchesStatus = true;
+    } else if (statusFilter === 'FLAGGED') {
+      matchesStatus = hasFlaggedIssues;
+    } else if (statusFilter === 'DUPLICATE') {
+      matchesStatus = isDuplicate;
+    } else {
+      matchesStatus = inv.status === statusFilter;
+    }
 
     return matchesSearch && matchesType && matchesStatus;
   });
@@ -569,39 +653,55 @@ function filterUserHistory() {
     const isExcel = inv.fileType === 'xlsx' || inv.fileType === 'xls' || inv.fileType === 'csv' || inv.inputType === 'DATASET_CSV' || (inv.filename && (inv.filename.endsWith('.xlsx') || inv.filename.endsWith('.xls') || inv.filename.endsWith('.csv')));
     const formatBadge = isExcel ? '<span class="badge-source badge-excel">📊 EXCEL</span>' : '<span class="badge-source badge-pdf">📄 PDF</span>';
     const formattedSize = inv.fileSize ? ` (${(inv.fileSize / 1024).toFixed(1)} KB)` : '';
+    
+    // Distinct checks for Duplicate and Flagged Issues
+    const isDuplicate = isInvoiceDuplicateInList(inv, currentInvoices) || (inv.flagReasons || []).some(r => r.reasonCode === 'DUPLICATE_INVOICE');
+    const nonDupFlags = (inv.flagReasons || []).filter(r => r.reasonCode !== 'DUPLICATE_INVOICE' && !r.message?.toLowerCase().includes('duplicate'));
+    const hasFlaggedIssues = nonDupFlags.length > 0 || (inv.status === 'FLAGGED' && !isDuplicate);
+    
+    // Core Status: PROCESSED, PENDING, APPROVED, REJECTED, FLAGGED
+    let displayStatus = inv.status || 'PENDING';
+    if (hasFlaggedIssues && displayStatus !== 'APPROVED' && displayStatus !== 'REJECTED') {
+      displayStatus = 'FLAGGED';
+    } else if (displayStatus === 'FLAGGED' && !hasFlaggedIssues && !isDuplicate) {
+      displayStatus = 'PROCESSED';
+    }
 
     return `
-      <tr>
+      <tr style="${isDuplicate ? 'background: rgba(239, 68, 68, 0.04);' : (hasFlaggedIssues ? 'background: rgba(245, 158, 11, 0.03);' : '')}">
         <td>
           <div style="font-weight:700;"><code>${inv.id}</code></div>
           <div style="font-size:11px; margin-top:2px;">${formatBadge}</div>
         </td>
         <td>
           <div style="font-weight:600; color:var(--text-main); font-size:13px;" title="${inv.filename || ''}">${inv.filename || 'Document'}</div>
-          <span style="font-size:11px; color:var(--text-muted);">${inv.invoiceNumber}${formattedSize}</span>
+          <span style="font-size:11px; color:var(--text-muted);">${inv.invoiceNumber || 'N/A'}${formattedSize}</span>
         </td>
-        <td><strong>${inv.vendor}</strong></td>
-        <td><strong style="color:#10b981;">$${(inv.total || 0).toFixed(2)}</strong></td>
+        <td><strong>${inv.vendor || 'Unknown Vendor'}</strong></td>
+        <td><strong style="color:#10b981;">${(inv.total || 0).toFixed(2)}</strong></td>
         <td><span class="confidence-badge" style="color:${inv.confidenceScore >= 0.94 ? '#10b981' : '#f59e0b'}; font-weight:700;">${((inv.confidenceScore || 0) * 100).toFixed(0)}%</span></td>
         <td>
-          <span class="status-badge status-${inv.status.toLowerCase()}">${inv.status}</span>
-          ${(inv.status === 'FLAGGED' || inv.status === 'FLAGGED_FOR_REVIEW' || inv.status === 'EXTRACTION_FAILED' || inv.status === 'ATTENTION_REQUIRED') ? `
-            <div style="margin-top:4px;">
-              <button class="btn xs danger" style="padding:2px 8px; font-weight:800; font-size:11px; border-radius:4px; display:inline-flex; align-items:center; gap:3px;" onclick="viewFlagDetails('${inv.id}')" title="View exact reason why document was flagged">
-                ⚠️ Flag Details
-              </button>
-            </div>
-          ` : ''}
+          <div style="display:flex; flex-direction:column; gap:4px; align-items:flex-start;">
+            <span class="status-badge status-${displayStatus.toLowerCase()}">${displayStatus}</span>
+            ${isDuplicate ? `
+              <span class="tag-duplicate-pill" title="Duplicate Invoice Submission Detected">
+                🚩 DUPLICATE
+              </span>
+            ` : ''}
+          </div>
         </td>
         <td>
-          <div>${inv.date || new Date(inv.createdAt).toLocaleDateString()}</div>
+          <div>${inv.date || (inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : 'N/A')}</div>
           ${inv.notes ? `<div style="font-size:11px; color:#a5b4fc; margin-top:2px;">📝 "${inv.notes}"</div>` : ''}
         </td>
         <td>
-          <div style="display:flex; gap:6px; flex-wrap:nowrap;">
+          <div style="display:flex; gap:5px; flex-wrap:nowrap;">
             <button class="btn xs ghost" onclick="inspectInvoice('${inv.id}')" title="View details and document preview">👁️ View</button>
-            ${(inv.status === 'FLAGGED' || inv.status === 'FLAGGED_FOR_REVIEW' || inv.status === 'EXTRACTION_FAILED' || inv.status === 'ATTENTION_REQUIRED') ? `
-              <button class="btn xs danger" onclick="viewFlagDetails('${inv.id}')" title="View Flag Reasons & Validation Explanation">⚠️ Flag Details</button>
+            ${hasFlaggedIssues ? `
+              <button class="btn xs ghost" onclick="viewFlagDetails('${inv.id}', 'FLAG')" title="View Flag Reasons">⚠️ Flag</button>
+            ` : ''}
+            ${isDuplicate ? `
+              <button class="btn xs ghost" onclick="viewFlagDetails('${inv.id}', 'DUPLICATE')" title="View Duplicate Warning">🚩 Duplicate</button>
             ` : ''}
             <button class="btn xs secondary" onclick="downloadInvoiceFile('${inv.id}')" title="Download original file">📥 Download</button>
           </div>
@@ -668,7 +768,19 @@ function renderApprovalDesk() {
   const grid = document.getElementById('approvalCardsGrid');
   if (!grid) return;
 
-  const filtered = currentInvoices.filter(i => i.status === currentFilter);
+  const filtered = currentInvoices.filter(i => {
+    const isDup = isInvoiceDuplicateInList(i, currentInvoices) || (i.flagReasons || []).some(r => r.reasonCode === 'DUPLICATE_INVOICE');
+    const nonDupFlags = (i.flagReasons || []).filter(r => r.reasonCode !== 'DUPLICATE_INVOICE' && !r.message?.toLowerCase().includes('duplicate'));
+    const hasFlags = nonDupFlags.length > 0 || i.status === 'FLAGGED';
+
+    if (currentFilter === 'FLAGGED') {
+      return hasFlags;
+    }
+    if (currentFilter === 'DUPLICATE') {
+      return isDup;
+    }
+    return i.status === currentFilter;
+  });
 
   if (filtered.length === 0) {
     grid.innerHTML = `<div style="grid-column: 1/-1; text-align:center; padding:48px; background:#ffffff; border:1px solid #e2e8f0; border-radius:16px; color:#64748b;">
@@ -677,22 +789,55 @@ function renderApprovalDesk() {
     return;
   }
 
-  grid.innerHTML = filtered.map(inv => `
-    <div class="approval-card">
+  grid.innerHTML = filtered.map(inv => {
+    const isDup = isInvoiceDuplicateInList(inv, currentInvoices) || (inv.flagReasons || []).some(r => r.reasonCode === 'DUPLICATE_INVOICE');
+    const nonDupFlags = (inv.flagReasons || []).filter(r => r.reasonCode !== 'DUPLICATE_INVOICE' && !r.message?.toLowerCase().includes('duplicate'));
+    const hasFlaggedIssues = nonDupFlags.length > 0 || inv.status === 'FLAGGED';
+
+    let displayStatus = inv.status || 'PENDING';
+    if (hasFlaggedIssues && displayStatus !== 'APPROVED' && displayStatus !== 'REJECTED') {
+      displayStatus = 'FLAGGED';
+    }
+
+    return `
+    <div class="approval-card" style="${isDup ? 'border: 1.5px solid #fca5a5; background: #fffcfc;' : (hasFlaggedIssues ? 'border: 1.5px solid #fde68a; background: #fffdf5;' : '')}">
       <div class="card-top flex-between">
-        <div class="inv-badge"><code>${inv.invoiceNumber}</code></div>
-        <span class="status-badge status-${inv.status.toLowerCase()}">${inv.status}</span>
+        <div class="inv-badge"><code>${inv.invoiceNumber || inv.id}</code></div>
+        <div style="display:flex; gap:4px; align-items:center;">
+          <span class="status-badge status-${displayStatus.toLowerCase()}">${displayStatus}</span>
+          ${isDup ? '<span class="tag-duplicate-pill">🚩 DUPLICATE</span>' : ''}
+        </div>
       </div>
 
       <div class="vendor-info" style="margin: 12px 0;">
-        <h4 style="font-size:16px; font-weight:700; color:#0f172a;">${inv.vendor}</h4>
+        <h4 style="font-size:16px; font-weight:700; color:#0f172a;">${inv.vendor || 'Unknown Vendor'}</h4>
         <p style="font-size:12px; color:#64748b;">Submitted by: ${inv.createdBy || 'AP Clerk'}</p>
       </div>
+
+      ${isDup ? `
+        <div style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.35); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 11px; color: #991b1b;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <strong style="font-size: 12px; color:#b91c1c;">🚩 Duplicate Invoice Warning</strong>
+            <span style="background: #ef4444; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 3px;">HIGH</span>
+          </div>
+          <div style="color: #7f1d1d; line-height: 1.3;">Invoice ${inv.invoiceNumber} from ${inv.vendor} matches an existing invoice.</div>
+        </div>
+      ` : ''}
+
+      ${hasFlaggedIssues && nonDupFlags.length > 0 ? `
+        <div style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.35); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; font-size: 11px; color: #92400e;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+            <strong style="font-size: 12px; color:#b45309;">⚠️ ${getReasonTitle(nonDupFlags[0].reasonCode)}</strong>
+            <span style="background: #f59e0b; color: #fff; font-size: 9px; font-weight: 800; padding: 1px 4px; border-radius: 3px;">${nonDupFlags[0].severity || 'MEDIUM'}</span>
+          </div>
+          <div style="color: #78350f; line-height: 1.3;">${nonDupFlags[0].message || nonDupFlags[0].reasonCode}</div>
+        </div>
+      ` : ''}
 
       <div class="inv-metrics-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:#f8fafc; padding:10px; border-radius:8px; margin-bottom:14px;">
         <div>
           <span style="font-size:11px; color:#64748b;">TOTAL AMOUNT</span>
-          <div style="font-size:16px; font-weight:800; color:#0f172a;">$${(inv.total || 0).toFixed(2)}</div>
+          <div style="font-size:16px; font-weight:800; color:#0f172a;">${(inv.total || 0).toFixed(2)}</div>
         </div>
         <div>
           <span style="font-size:11px; color:#64748b;">OCR CONFIDENCE</span>
@@ -700,11 +845,14 @@ function renderApprovalDesk() {
         </div>
       </div>
 
-      <div class="card-actions flex-gap">
-        ${(inv.status === 'FLAGGED' || inv.status === 'FLAGGED_FOR_REVIEW' || inv.status === 'EXTRACTION_FAILED' || inv.status === 'ATTENTION_REQUIRED') ? `
-          <button class="btn sm danger flex-1" onclick="viewFlagDetails('${inv.id}')">⚠️ View Flag Details</button>
+      <div class="card-actions flex-gap" style="flex-wrap:wrap;">
+        ${hasFlaggedIssues ? `
+          <button class="btn sm warning flex-1" style="background:rgba(245, 158, 11, 0.15); color:#b45309; border:1px solid rgba(245,158,11,0.3);" onclick="viewFlagDetails('${inv.id}', 'FLAG')">⚠️ View Flag Details</button>
         ` : ''}
-        ${inv.status === 'PENDING' ? `
+        ${isDup ? `
+          <button class="btn sm danger flex-1" style="background:rgba(239, 68, 68, 0.15); color:#b91c1c; border:1px solid rgba(239,68,68,0.3);" onclick="viewFlagDetails('${inv.id}', 'DUPLICATE')">🚩 View Duplicate Details</button>
+        ` : ''}
+        ${(displayStatus === 'PENDING' || displayStatus === 'FLAGGED') ? `
           <button class="btn sm accent flex-1" onclick="approveInvoice('${inv.id}')">✅ Approve</button>
           <button class="btn sm danger flex-1" onclick="rejectInvoice('${inv.id}')">🚫 Reject</button>
         ` : `
@@ -712,7 +860,8 @@ function renderApprovalDesk() {
         `}
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 }
 
 function filterApproval(status, btnEl) {
@@ -862,32 +1011,50 @@ function renderMongoDBTable() {
 
   const docs = selectedStatus === 'ALL' 
     ? currentInvoices 
-    : currentInvoices.filter(i => i.status === selectedStatus);
+    : currentInvoices.filter(i => {
+        const isDup = isInvoiceDuplicateInList(i, currentInvoices) || (i.flagReasons || []).some(r => r.reasonCode === 'DUPLICATE_INVOICE');
+        const nonDupFlags = (i.flagReasons || []).filter(r => r.reasonCode !== 'DUPLICATE_INVOICE' && !r.message?.toLowerCase().includes('duplicate'));
+        const hasFlags = nonDupFlags.length > 0 || i.status === 'FLAGGED';
+
+        if (selectedStatus === 'DUPLICATE') return isDup;
+        if (selectedStatus === 'FLAGGED') return hasFlags;
+        return i.status === selectedStatus;
+      });
 
   if (docs.length === 0) {
     tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; padding:24px; color:#64748b;">No documents found in MongoDB collection 'invoices'.</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = docs.map(inv => `
-    <tr>
+  tbody.innerHTML = docs.map(inv => {
+    const isDup = isInvoiceDuplicateInList(inv, currentInvoices) || (inv.flagReasons || []).some(r => r.reasonCode === 'DUPLICATE_INVOICE');
+    const nonDupFlags = (inv.flagReasons || []).filter(r => r.reasonCode !== 'DUPLICATE_INVOICE' && !r.message?.toLowerCase().includes('duplicate'));
+    const hasFlags = nonDupFlags.length > 0 || inv.status === 'FLAGGED';
+    const displayStatus = inv.status || 'PENDING';
+
+    return `
+    <tr style="${isDup ? 'background: rgba(239, 68, 68, 0.04);' : ''}">
       <td><code>${inv.id}</code></td>
       <td><strong>${inv.createdBy || 'AP Clerk'}</strong></td>
-      <td><strong>${inv.vendor}</strong></td>
-      <td><strong>$${(inv.total || 0).toFixed(2)}</strong></td>
+      <td><strong>${inv.vendor || 'Unknown Vendor'}</strong></td>
+      <td><strong>${(inv.total || 0).toFixed(2)}</strong></td>
       <td>${((inv.confidenceScore || 0) * 100).toFixed(0)}%</td>
-      <td><span class="status-badge status-${inv.status.toLowerCase()}">${inv.status}</span></td>
+      <td>
+        <span class="status-badge status-${displayStatus.toLowerCase()}">${displayStatus}</span>
+        ${isDup ? `
+          <div style="margin-top:3px;">
+            <span class="tag-duplicate-pill">🚩 DUPLICATE</span>
+          </div>
+        ` : ''}
+      </td>
       <td><button class="btn xs ghost" onclick="inspectLogs('${inv.id}')">📜 Trail (${inv.processingLogs ? inv.processingLogs.length : 0})</button></td>
       <td>
         <button class="btn xs ghost" onclick="inspectJson('${inv.id}')">🍃 BSON JSON</button>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
-
-// ============================================================================
-// 3. FILE UPLOAD & PROCESSING TRIGGER LOGIC
-// ============================================================================
 
 function triggerFileInput(inputId) {
   const inputEl = document.getElementById(inputId);
@@ -1446,6 +1613,39 @@ function inspectInvoice(id) {
         </div>
       </div>
 
+      <!-- FLAGGED REASONS BANNER IF PRESENT -->
+      ${(inv.flagReasons && inv.flagReasons.length > 0) ? `
+        <div style="margin-bottom:16px; background:#fff5f5; border:1.5px solid #f87171; border-radius:10px; padding:14px 16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <span style="font-size:13px; font-weight:800; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px; display:flex; align-items:center; gap:6px;">
+              <span>🚨</span> FLAGGED DOCUMENT ISSUES (${inv.flagReasons.length})
+            </span>
+            <button class="btn xs danger" onclick="viewFlagDetails('${inv.id}')" style="padding:2px 8px; font-weight:800; font-size:11px;">
+              ⚠️ View Full Flag Details
+            </button>
+          </div>
+          ${inv.flagReasons.map(r => {
+            const isDup = r.reasonCode === 'DUPLICATE_INVOICE';
+            const rTitle = getReasonTitle(r.reasonCode);
+            const sev = r.severity || 'HIGH';
+            return `
+              <div style="background:#ffffff; border:1px solid #fecaca; border-radius:6px; padding:10px 12px; margin-top:6px; font-size:12px; color:#334155;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-weight:800; color:#b91c1c; font-size:13px;">${isDup ? '🚩' : '⚠️'} ${rTitle}</span>
+                  <span style="background:#ef4444; color:#fff; font-size:10px; font-weight:800; padding:1px 6px; border-radius:3px;">
+                    Severity: ${sev}
+                  </span>
+                </div>
+                <div><strong>Reason Code:</strong> <code>${r.reasonCode}</code></div>
+                <div style="margin-top:2px; color:#7f1d1d; font-weight:600;">
+                  <strong>${isDup ? 'Explanation:' : 'Message:'}</strong> ${r.message || 'Validation error'}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : ''}
+
       ${inv.rejectionReason ? `
         <div style="margin-bottom:14px; padding:12px 14px; background:#fef2f2; border:1px solid #fecaca; border-radius:8px;">
           <span style="font-size:11px; font-weight:800; color:#dc2626; text-transform:uppercase; letter-spacing:0.5px;">🚫 MONGODB STORED REJECTION REASON:</span>
@@ -1594,7 +1794,7 @@ async function triggerModelTraining() {
 // FLAG DETAILS MODAL & DETAILED CALCULATIONS
 // ============================================================================
 
-async function viewFlagDetails(id) {
+async function viewFlagDetails(id, focusMode = 'ALL') {
   let inv = currentInvoices.find(i => i.id === id || i._id === id);
 
   try {
@@ -1618,11 +1818,39 @@ async function viewFlagDetails(id) {
 
   const docType = inv.documentType || (inv.inputType === 'DATASET_CSV' ? 'DATASET' : 'INVOICE');
   const isDataset = docType === 'DATASET';
+  const isDup = isInvoiceDuplicateInList(inv, currentInvoices) || (inv.flagReasons || []).some(r => r.reasonCode === 'DUPLICATE_INVOICE');
 
-  flagModalTitle.textContent = isDataset ? '⚠️ DATASET FLAGGED - Calculation & Quality Explanation' : '⚠️ FILE FLAGGED - Calculation & Validation Errors';
+  if (isDataset) {
+    flagModalTitle.textContent = '⚠️ DATASET FLAGGED - Calculation & Quality Explanation';
+  } else if (focusMode === 'DUPLICATE') {
+    flagModalTitle.textContent = '🚩 DUPLICATE INVOICE - Review Submission Details';
+  } else if (focusMode === 'FLAG') {
+    flagModalTitle.textContent = '⚠️ FILE FLAGGED - Calculation & Validation Errors';
+  } else if (isDup) {
+    flagModalTitle.textContent = '🚩 DUPLICATE INVOICE FLAGGED - Review Details';
+  } else {
+    flagModalTitle.textContent = '⚠️ FILE FLAGGED - Calculation & Validation Errors';
+  }
+
   flagModalSub.textContent = `Document ID: ${inv.id} | Filename: ${inv.filename || 'Uploaded File'} | Classification: [${docType}]`;
 
-  const flagReasons = inv.flagReasons || [];
+  let flagReasons = (inv.flagReasons || []).slice();
+  if (isDup && !flagReasons.some(r => r.reasonCode === 'DUPLICATE_INVOICE')) {
+    flagReasons.unshift({
+      field: 'invoiceNumber',
+      validation: 'DUPLICATE_INVOICE_CHECK',
+      status: 'FAILED',
+      severity: 'HIGH',
+      reasonCode: 'DUPLICATE_INVOICE',
+      message: `Duplicate invoice detected: invoice ${inv.invoiceNumber} from ${inv.vendor} already exists.`,
+      expected: 'Unique invoice',
+      actual: `Duplicate invoice exists (${inv.id})`,
+      difference: null,
+      confidenceImpact: -30,
+      qualityImpact: 0,
+      scoreImpact: -30
+    });
+  }
   const validationResults = inv.validationResults || [];
   const scoreBreakdown = inv.scoreBreakdown || [];
   const currency = inv.currency || 'USD';
@@ -1774,29 +2002,42 @@ async function viewFlagDetails(id) {
   let flagReasonsListHtml = '';
   if (flagReasons.length > 0) {
     flagReasonsListHtml = flagReasons.map((reason, idx) => {
+      const code = reason.reasonCode || 'FLAGGED_REASON';
+      const isDuplicate = code === 'DUPLICATE_INVOICE';
+      const reasonTitle = getReasonTitle(code);
+      const icon = isDuplicate ? '🚩' : (code.includes('MISMATCH') ? '❌' : '⚠️');
+
       const sev = reason.severity || 'HIGH';
       const sevBg = sev === 'CRITICAL' ? '#fef2f2' : sev === 'HIGH' ? '#fff7ed' : '#fefce8';
       const sevBorder = sev === 'CRITICAL' ? '#fca5a5' : sev === 'HIGH' ? '#fdba74' : '#fef08a';
       const sevTagBg = sev === 'CRITICAL' ? '#ef4444' : sev === 'HIGH' ? '#f97316' : '#eab308';
 
-      const expValStr = formatVal(reason.expected, reason.reasonCode || '');
-      const actValStr = formatVal(reason.actual, reason.reasonCode || '');
+      const expValStr = formatVal(reason.expected, code);
+      const actValStr = formatVal(reason.actual, code);
       const diffValStr = reason.difference !== null && reason.difference !== undefined 
-        ? formatVal(reason.difference, reason.reasonCode || '') 
+        ? formatVal(reason.difference, code) 
         : null;
 
       const impactVal = reason.confidenceImpact || reason.qualityImpact || reason.scoreImpact || 0;
 
       return `
-        <div style="background: ${sevBg}; border: 1px solid ${sevBorder}; border-radius: 12px; padding: 16px; margin-bottom: 14px;">
+        <div style="background: ${sevBg}; border: 1.5px solid ${sevBorder}; border-radius: 12px; padding: 16px; margin-bottom: 14px;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-weight: 800; font-size: 15px; color: #0f172a;">${idx + 1}. ${reason.message || reason.reasonCode}</span>
+              <span style="font-size: 18px;">${icon}</span>
+              <span style="font-weight: 800; font-size: 15px; color: #0f172a;">${isDuplicate ? '🚩 Duplicate Invoice' : `${idx + 1}. ${reasonTitle}`}</span>
             </div>
             <div style="display: flex; gap: 6px; align-items: center;">
               <span style="background: ${sevTagBg}; color: #ffffff; font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 4px;">Severity: ${sev}</span>
-              ${reason.reasonCode ? `<code style="background: #ffffff; color: #475569; border: 1px solid #cbd5e1; font-size: 11px; padding: 2px 6px; border-radius: 4px;">${reason.reasonCode}</code>` : ''}
+              <code style="background: #ffffff; color: #475569; border: 1px solid #cbd5e1; font-size: 11px; padding: 2px 6px; border-radius: 4px;">Code: ${code}</code>
             </div>
+          </div>
+
+          <div style="background: #ffffff; border: 1px solid ${sevBorder}; border-radius: 8px; padding: 12px 14px; margin-bottom: 10px; font-size: 13px; color: #334155; line-height: 1.6;">
+            <div><strong>Reason:</strong> ${reasonTitle}</div>
+            <div style="margin-top: 2px;"><strong>Reason Code:</strong> <code>${code}</code></div>
+            <div style="margin-top: 2px;"><strong>Severity:</strong> <span style="font-weight: 800; color: ${sevTagBg};">${sev}</span></div>
+            <div style="margin-top: 2px; color: #7f1d1d;"><strong>${isDuplicate ? 'Explanation' : 'Message'}:</strong> ${reason.message || 'Validation error detected.'}</div>
           </div>
 
           <!-- Comparison Grid -->
@@ -1812,7 +2053,7 @@ async function viewFlagDetails(id) {
             <div>
               <span style="color: #64748b; font-weight: 700;">Difference / Impact:</span>
               <div style="font-weight: 700; color: #b91c1c; font-size: 14px; margin-top: 2px;">
-                ${diffValStr ? `Diff: ${diffValStr}` : ''} ${impactVal ? `(${impactVal > 0 ? '-' : ''}${Math.abs(impactVal)}% score)` : ''}
+                ${diffValStr ? `Diff: ${diffValStr}` : ''} ${impactVal ? `(${impactVal > 0 ? '-' : ''}${Math.abs(impactVal)}% score)` : (!diffValStr ? 'N/A' : '')}
               </div>
             </div>
           </div>

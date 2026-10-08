@@ -426,10 +426,11 @@
                   <option value="EXCEL">📊 Excel / CSV</option>
                 </select>
 
-                <select id="userHistoryStatusFilter" class="form-input sm" onchange="filterUserHistory()"
-                  style="width: 130px;">
+                <select id="userHistoryStatusFilter" class="form-input sm" onchange="filterUserHistory()" style="width: 145px;">
                   <option value="ALL">All Statuses</option>
                   <option value="PENDING">⏳ PENDING</option>
+                  <option value="FLAGGED">⚠️ FLAGGED</option>
+                  <option value="DUPLICATE">🚩 DUPLICATE</option>
                   <option value="APPROVED">✅ APPROVED</option>
                   <option value="REJECTED">🚫 REJECTED</option>
                 </select>
@@ -448,7 +449,7 @@
                     <th>Total ($)</th>
                     <th>Confidence</th>
                     <th>Status</th>
-                    <th>Date & Remarks</th>
+                    <th>Date</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -514,6 +515,8 @@
             <div class="desk-filters-bar">
               <div class="desk-filters">
                 <button class="tab-btn active" onclick="filterApproval('PENDING', this)">Pending Approvals</button>
+                <button class="tab-btn" onclick="filterApproval('FLAGGED', this)">⚠️ Flagged Invoices</button>
+                <button class="tab-btn" onclick="filterApproval('DUPLICATE', this)">🚩 Duplicate Invoices</button>
                 <button class="tab-btn" onclick="filterApproval('APPROVED', this)">Approved History</button>
                 <button class="tab-btn" onclick="filterApproval('REJECTED', this)">Rejected Invoices</button>
               </div>
@@ -838,6 +841,8 @@
                 <select id="dbStatusFilter" onchange="renderMongoDBTable()">
                   <option value="ALL">All Statuses</option>
                   <option value="PENDING">PENDING</option>
+                  <option value="FLAGGED">⚠️ FLAGGED</option>
+                  <option value="DUPLICATE">🚩 DUPLICATE</option>
                   <option value="APPROVED">APPROVED</option>
                   <option value="REJECTED">REJECTED</option>
                 </select>
