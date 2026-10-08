@@ -193,6 +193,55 @@ async function runProcessingEngine(inputData) {
       customDate
     });
 
+    // Duplicate Invoice Detection Check
+    if (docTypeLabel === 'INVOICE' && isMongoConnected) {
+      const vendor = (extracted.vendor || '').trim();
+      const invoiceNumber = (extracted.invoiceNumber || '').trim();
+      const invoiceDate = (extracted.date || '').trim();
+      const totalAmount = typeof extracted.total === 'number' ? extracted.total : 0;
+
+      if (vendor && vendor !== 'Unknown Vendor' && invoiceNumber && !invoiceNumber.includes('UNPARSED') && invoiceDate) {
+        try {
+          const duplicateInvoice = await Invoice.findOne({
+            vendor: new RegExp(`^${vendor.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+            invoiceNumber: new RegExp(`^${invoiceNumber.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i'),
+            date: invoiceDate,
+            total: { $gte: totalAmount - 0.01, $lte: totalAmount + 0.01 }
+          });
+
+          if (duplicateInvoice) {
+            const dupMsg = `Duplicate invoice detected: invoice ${invoiceNumber} from ${vendor} already exists.`;
+            const duplicateReason = {
+              field: 'invoiceNumber',
+              validation: 'DUPLICATE_INVOICE_CHECK',
+              status: 'FAILED',
+              severity: 'HIGH',
+              reasonCode: 'DUPLICATE_INVOICE',
+              message: dupMsg,
+              expected: 'Unique invoice',
+              actual: `Duplicate invoice exists (${duplicateInvoice.id})`,
+              difference: null,
+              confidenceImpact: -30,
+              qualityImpact: 0,
+              scoreImpact: -30
+            };
+
+            extracted.status = 'FLAGGED';
+            extracted.flagReasons = extracted.flagReasons || [];
+            if (!extracted.flagReasons.some(r => r.reasonCode === 'DUPLICATE_INVOICE')) {
+              extracted.flagReasons.push(duplicateReason);
+            }
+            extracted.validationResults = extracted.validationResults || [];
+            extracted.validationResults.push(duplicateReason);
+            extracted.decisionReason = `File flagged: ${dupMsg}`;
+            extracted.recommendedAction = 'Verify if this invoice is a duplicate submission before proceeding.';
+          }
+        } catch (dupErr) {
+          console.error('[Duplicate Check Error]', dupErr);
+        }
+      }
+    }
+
     const rpaLogs = [
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 1. Processing request received from Web Application (${batchFileName})`,
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 2. Robot Framework automation workflow started`,
@@ -201,6 +250,7 @@ async function runProcessingEngine(inputData) {
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 5. Document classified as: [${docTypeLabel}]`,
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 6 & 7. Executing ${isDataset ? 'Dataset Processing Robot Workflow' : 'Invoice Processing Robot Workflow (invoking supporting AI Model)'}`,
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 8. Validation executed (${isDataset ? 'Tabular & Cell Structure Checks' : 'Arithmetic & Field Integrity Checks'})`,
+      `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 8b. Duplicate invoice detection check completed`,
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 9. Calculated ${isDataset ? 'Data Quality Score' : 'Invoice Confidence Score'}: ${(extracted.confidenceScore * 100).toFixed(1)}%`,
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 10. Storing document record into MongoDB (Collection: 'invoices')`,
       `🤖 [ROBOT FRAMEWORK RPA ORCHESTRATOR] 11. Updated processing status -> ${extracted.status}`,

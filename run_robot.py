@@ -21,6 +21,9 @@ def run_robot_suite(target="rpa"):
     elif target == "dataset":
         suite_file = os.path.join(rf_dir, "tasks", "process_dataset.robot")
         print("[ROBOT FRAMEWORK] Running Dataset Processing Robot Workflow...")
+    elif target == "duplicate":
+        suite_file = os.path.join(rf_dir, "tasks", "check_duplicate_invoice.robot")
+        print("[ROBOT FRAMEWORK] Running Duplicate Invoice Detection Robot Workflow...")
     else:
         suite_file = os.path.join(rf_dir, "rpa_tasks.robot")
         print("[ROBOT FRAMEWORK] Running RPA Orchestration Pipeline Tasks...")

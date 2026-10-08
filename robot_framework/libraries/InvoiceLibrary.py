@@ -4,6 +4,44 @@ import re
 import base64
 from robot.api.deco import keyword
 
+def _parse_invoice_dict(data):
+    if isinstance(data, dict):
+        return data
+    if isinstance(data, str):
+        data_str = data.strip()
+        if not data_str:
+            return {}
+        try:
+            import json
+            return json.loads(data_str)
+        except Exception:
+            pass
+        try:
+            import ast
+            parsed = ast.literal_eval(data_str)
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception:
+            pass
+        try:
+            import re
+            parsed = {}
+            pairs = re.findall(r'(\w+)\s*[=:]\s*([^,;]+)', data_str)
+            for k, v in pairs:
+                v_clean = v.strip().strip('"\'')
+                try:
+                    if '.' in v_clean:
+                        parsed[k] = float(v_clean)
+                    else:
+                        parsed[k] = int(v_clean)
+                except ValueError:
+                    parsed[k] = v_clean
+            if parsed:
+                return parsed
+        except Exception:
+            pass
+    return {}
+
 class InvoiceLibrary:
     """
     Custom Python Keyword Library for Robot Framework Invoice Processing RPA & Verification
@@ -157,3 +195,95 @@ class InvoiceLibrary:
         pending_count = sum(1 for inv in processed_invoices if inv.get('status') in ['PENDING', 'PENDING_REVIEW'])
         total_val = sum(float(inv.get('total', 0)) for inv in processed_invoices)
         return f"RPA Processed {total_count} invoices: {approved_count} Auto-Approved, {pending_count} Pending Review. Total Value: ${total_val:.2f}"
+
+    @keyword("Check Duplicate Invoice In Data")
+    def check_duplicate_invoice_in_data(self, invoice_dict, existing_invoices):
+        """
+        Checks if invoice_dict matches any invoice in existing_invoices based on:
+        1. vendor
+        2. invoiceNumber
+        3. date
+        4. total
+        Returns the matched invoice dictionary or None.
+        """
+        invoice_dict = _parse_invoice_dict(invoice_dict)
+        if not isinstance(invoice_dict, dict) or not isinstance(existing_invoices, list):
+            return None
+
+        vendor = str(invoice_dict.get('vendor', '')).strip().lower()
+        inv_num = str(invoice_dict.get('invoiceNumber', '')).strip().lower()
+        date = str(invoice_dict.get('date', '')).strip()
+
+        if not vendor or vendor == 'unknown vendor' or not inv_num or 'unparsed' in inv_num or not date:
+            return None
+
+        try:
+            total = round(float(invoice_dict.get('total', 0)), 2)
+        except (ValueError, TypeError):
+            return None
+
+        curr_id = invoice_dict.get('id')
+
+        for item in existing_invoices:
+            if not isinstance(item, dict):
+                continue
+            if curr_id and item.get('id') == curr_id:
+                continue
+            item_vendor = str(item.get('vendor', '')).strip().lower()
+            item_inv_num = str(item.get('invoiceNumber', '')).strip().lower()
+            item_date = str(item.get('date', '')).strip()
+            try:
+                item_total = round(float(item.get('total', 0)), 2)
+            except (ValueError, TypeError):
+                continue
+
+            if (item_vendor == vendor and 
+                item_inv_num == inv_num and 
+                item_date == date and 
+                abs(item_total - total) <= 0.01):
+                return item
+
+        return None
+
+    @keyword("Apply Duplicate Invoice Flag")
+    def apply_duplicate_invoice_flag(self, invoice_dict, existing_doc=None):
+        """
+        Applies DUPLICATE_INVOICE flag reasons and status to the invoice dictionary.
+        """
+        invoice_dict = _parse_invoice_dict(invoice_dict)
+        vendor = invoice_dict.get('vendor', 'Unknown Vendor')
+        inv_no = invoice_dict.get('invoiceNumber', 'N/A')
+        msg = f"Duplicate invoice detected: invoice {inv_no} from {vendor} already exists."
+
+        existing_id = existing_doc.get('id', 'Existing') if isinstance(existing_doc, dict) else 'Existing'
+        flag_reason = {
+            "reasonCode": "DUPLICATE_INVOICE",
+            "severity": "HIGH",
+            "message": msg,
+            "field": "invoiceNumber",
+            "validation": "DUPLICATE_INVOICE_CHECK",
+            "expected": "Unique invoice",
+            "actual": f"Duplicate invoice exists in MongoDB (ID: {existing_id})",
+            "difference": None,
+            "scoreImpact": -30,
+            "confidenceImpact": -30,
+            "qualityImpact": 0
+        }
+
+        flag_reasons = invoice_dict.get('flagReasons', [])
+        if not isinstance(flag_reasons, list):
+            flag_reasons = []
+        if not any(fr.get('reasonCode') == 'DUPLICATE_INVOICE' for fr in flag_reasons if isinstance(fr, dict)):
+            flag_reasons.append(flag_reason)
+        invoice_dict['flagReasons'] = flag_reasons
+
+        val_results = invoice_dict.get('validationResults', [])
+        if isinstance(val_results, list) and not any(vr.get('reasonCode') == 'DUPLICATE_INVOICE' for vr in val_results if isinstance(vr, dict)):
+            val_results.append(flag_reason)
+            invoice_dict['validationResults'] = val_results
+
+        invoice_dict['status'] = 'FLAGGED'
+        invoice_dict['decisionReason'] = f"File flagged: {msg}"
+        invoice_dict['recommendedAction'] = "Verify if this invoice is a duplicate submission before proceeding."
+        return invoice_dict
+

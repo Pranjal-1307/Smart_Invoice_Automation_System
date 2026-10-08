@@ -74,6 +74,17 @@ def orchestrate_document_processing(input_data):
                 diff_str = f" | Difference: ${diff:,.2f}" if isinstance(diff, (int, float)) else ""
                 logs.append(f"[VALIDATION FAILED]\nReason: {code}\nSeverity: {sev}{diff_str}")
 
+        # Duplicate Invoice Detection RPA Workflow Step (calls check_duplicate_invoice workflow engine)
+        rpa_log("Executing Duplicate Invoice Detection Check against MongoDB Store")
+        duplicate_doc = db_lib.check_for_duplicate_invoice(extracted_data)
+        if duplicate_doc:
+            extracted_data = inv_lib.apply_duplicate_invoice_flag(extracted_data, duplicate_doc)
+            dup_msg = extracted_data.get("decisionReason", f"Duplicate invoice detected: invoice {inv_no} from {vendor} already exists.")
+            rpa_log(f"Duplicate Invoice Found! {dup_msg}")
+            logs.append(f"[VALIDATION FAILED]\nReason: DUPLICATE_INVOICE\nSeverity: HIGH\nMessage: {dup_msg}")
+        else:
+            rpa_log("No duplicate found. Invoice verified for database storage.")
+
         conf_score = float(extracted_data.get("confidenceScore") or 0)
         conf_pct = int(conf_score * 100 if conf_score <= 1.0 else conf_score)
         threshold = int(extracted_data.get("threshold") or 85)

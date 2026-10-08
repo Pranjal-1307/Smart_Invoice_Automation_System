@@ -3,6 +3,7 @@ Documentation    Invoice Extraction & Validation Keywords for Robot Framework In
 Library          Collections
 Library          ../libraries/InvoiceLibrary.py
 Resource         logging.resource
+Resource         duplicate.resource
 
 *** Keywords ***
 Run Invoice Processing Workflow
@@ -26,5 +27,8 @@ Run Invoice Processing Workflow
     Set To Dictionary    ${doc_content}    status=${status}
     Set To Dictionary    ${doc_content}    confidenceScore=${confidence}
     Set To Dictionary    ${doc_content}    validation=${val_result}
+
+    # Execute Duplicate Detection Robot Workflow before persistence
+    ${doc_content}=    Run Duplicate Invoice Detection Robot    ${doc_content}
 
     RETURN    ${doc_content}
